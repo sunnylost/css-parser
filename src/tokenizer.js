@@ -93,6 +93,15 @@ let //https://drafts.csswg.org/css-syntax-3/#tokenization
     //TODO: reverse slash
     isName               = cp => isNameStart( cp ) || isDigit( cp ) || cp === HYPHEN_MINUS
 
+function simpleTokenWrapper( type ) {
+    return {
+               type,
+        start: this.pos,
+        end:   this.pos + 1,
+        value: this.next()
+    }
+}
+
 class Tokenizer {
     constructor( src ) {
         this.src    = src
@@ -137,10 +146,34 @@ class Tokenizer {
 
                 case QUOTATION_MARK:
                     return this.consumeString()
+
+                case COLON:
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
+
+                case SEMICOLON:
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
+
+                case LEFT_CURLY_BRACKET:
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_BRACE )
+
+                case RIGHT_CURLY_BRACKET:
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
+
+                default:
+                    return {
+                        start: this.pos,
+                        end:   this.pos + 1,
+                        type:  404,
+                        value: this.next()
+                    }
             }
         }
 
-        return NULL
+        return {
+            start: this.pos,
+            end:   this.srcLen - 1,
+            type:  TOKEN_TYPE.EOF
+        }
     }
 
     //TODO: preprocessHandler
@@ -221,6 +254,26 @@ class Tokenizer {
     }
 
     consumeString() {
+        let result = [],
+            start  = this.pos,
+            type   = TOKEN_TYPE.STRING,
+            value, ch, end
+
+        while ( ( ch = this.peek() ) ) {
+            result.push( this.next() )
+            //TODO: REVERSE SOLIDUS
+            if ( ch.codePointAt( 0 ) === NEWLINE ) {
+                type = TOKEN_TYPE.BAD_STRING
+                break
+            }
+        }
+
+        end   = this.pos
+        value = result.join( '' )
+
+        return {
+            start, end, value, type
+        }
     }
 
     consumeNumber() {
@@ -229,10 +282,16 @@ class Tokenizer {
     consumeIdent() {
         let result = [],
             start  = this.pos,
-            ch, end
+            ch, end, value
 
         while ( ( ch = this.peek() ) && isName( ch.codePointAt( 0 ) ) ) {
             result.push( this.next() )
+        }
+
+        //TODO: URL
+        if ( ( value = result.join( '' ) ) === 'url' &&
+            this.peek() === '('
+        ) {
         }
 
         end = this.pos
