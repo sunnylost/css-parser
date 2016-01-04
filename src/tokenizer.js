@@ -1,40 +1,4 @@
-let //https://drafts.csswg.org/css-syntax-3/#tokenization
-    TOKEN_TYPE           = {
-        EOF:                  -2,
-        COMMENT:              -1,
-        IDENT:                0,
-        FUNCTION:             1,
-        AT_KEYWORD:           2,
-        Hash:                 3,
-        STRING:               4,
-        BAD_STRING:           5,
-        URL:                  6,
-        BAD_URL:              7,
-        DELIM:                8,
-        NUMBER:               9,
-        PERCENTAGE:           10,
-        DIMENSION:            11,
-        INCLUDE_MATCH:        12,
-        DASH_MATCH:           13,
-        PREFIX_MATCH:         14,
-        SUFFIX_MATCH:         15,
-        SUBSTRING_MATCH:      16,
-        COLUMN:               17,
-        WHITESPACE:           18,
-        CDO:                  19,
-        CDC:                  20,
-        COLON:                21, //:
-        SEMICOLON:            22, //;
-        COMMA:                23, //,
-        LEFT_SQUARE_BRACKET:  24, //[
-        RIGHT_SQUARE_BRACKET: 25, //]
-        LEFT_PARENTHESIS:     26, //(
-        RIGHT_PARENTHESIS:    27, //)
-        LEFT_BRACE:           28, //{
-        RIGHT_BRACE:          29  //}
-    },
-
-    NULL                 = null,
+let NULL                 = null,
     CT                   = 0x9,//CHARACTER TABULATION
     LF                   = 0xa,//LINE FEED
     FF                   = 0xc,//FORM FEED
@@ -55,6 +19,7 @@ let //https://drafts.csswg.org/css-syntax-3/#tokenization
     COLON                = 0x3a,//:
     SEMICOLON            = 0x3b,//;
     LESS_THAN_SIGN       = 0x3c,//<
+    EQUALS_SIGN          = 0x3d,//=
     COMMERCIAL_AT        = 0x40,//@
     LEFT_SQUARE_BRACKET  = 0x5b,//[
     REVERSE_SOLIDUS      = 0x5c,//\
@@ -91,7 +56,9 @@ let //https://drafts.csswg.org/css-syntax-3/#tokenization
     isNonASCII           = cp => cp >= 0x80,
     isNameStart          = cp => isLetter( cp ) || isNonASCII( cp ) || cp === LOW_LINE,
     //TODO: reverse slash
-    isName               = cp => isNameStart( cp ) || isDigit( cp ) || cp === HYPHEN_MINUS
+    isName               = cp => isNameStart( cp ) || isDigit( cp ) || cp === HYPHEN_MINUS,
+
+    TOKEN_TYPE
 
 function simpleTokenWrapper( type ) {
     return {
@@ -111,8 +78,10 @@ class Tokenizer {
         this.pos    = 0
     }
 
-    run() {
+    run( TokenType ) {
         let token
+
+        TOKEN_TYPE = TokenType
 
         while ( token = this.advance() ) {
             this.tokens.push( token )
@@ -158,6 +127,20 @@ class Tokenizer {
 
                 case RIGHT_CURLY_BRACKET:
                     return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
+
+                case NUMBER_SIGN:
+                    if ( isName( this.peek() ) ) {
+                        return this.consumeHash()
+                    }
+
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+                case DOLLAR_SIGN:
+                    if ( (ch = this.peek()) && ch.codePointAt( 0 ) == EQUALS_SIGN ) {
+                        return this.consumeSuffixMatch()
+                    }
+
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
                 default:
                     return {
@@ -301,6 +284,14 @@ class Tokenizer {
             type:  TOKEN_TYPE.IDENT,
             value: result.join( '' )
         }
+    }
+
+    consumeHash() {
+        //TODO
+    }
+
+    consumeSuffixMatch() {
+        //TODO
     }
 }
 
