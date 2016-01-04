@@ -1,4 +1,6 @@
+import TokenType from './tokenType'
 import Tokenizer from './tokenizer'
+import Parser from './parser'
 
 class CSSParser {
     tokenize( src ) {
@@ -6,8 +8,12 @@ class CSSParser {
             //TODO
             return null
         }
-        console.log( Tokenizer )
-        return ( new Tokenizer( src ).run() )
+
+        return ( new Tokenizer( src ).run( TokenType ) )
+    }
+
+    parse( src ) {
+        return ( new Parser( this.tokenize( src ) ).run( TokenType ) )
     }
 }
 
