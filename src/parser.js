@@ -1,4 +1,5 @@
-let TOKEN_TYPE
+let TOKEN_TYPE,
+    mirrorType
 
 class Parser {
     constructor( tokens ) {
@@ -11,6 +12,11 @@ class Parser {
 
     run( TokenType ) {
         TOKEN_TYPE = TokenType
+        mirrorType = {
+            [TOKEN_TYPE.LEFT_SQUARE_BRACKET]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
+            [TOKEN_TYPE.LEFT_PARENTHESIS]:    TOKEN_TYPE.RIGHT_PARENTHESIS,
+            [TOKEN_TYPE.LEFT_BRACE]:          TOKEN_TYPE.RIGHT_BRACE
+        }
         return this.parseStyleSheet()
     }
 
@@ -107,10 +113,54 @@ class Parser {
     }
 
     consumeQualifiedRule() {
+        let tokens = this.tokens,
+            rules  = []
 
+        while ( 1 ) {
+            let token = tokens.shift(),
+                type  = token.type
+
+            if ( type === TOKEN_TYPE.EOF ) {
+                //parse error
+                return null
+            } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
+                rules.push( this.consumeSimpleBlock() )
+                return rules
+                //TODO: simple block with an associated token of <{-token>
+            } else {
+                tokens.unshift( token )
+                rules.push( this.consumeComponentValue() )
+            }
+        }
     }
 
     consumeAtRule() {
+        let tokens = this.tokens,
+            rules  = []
+
+        while ( 1 ) {
+            let token = tokens.shift(),
+                type  = token.type
+
+            if ( type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF ) {
+                return rules
+            } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
+                rules.push( this.consumeSimpleBlock() )
+                return rules
+                //TODO: simple block with an associated token of <{-token>
+            } else {
+                tokens.unshift( token )
+                rules.push( this.consumeComponentValue() )
+            }
+        }
+    }
+
+    consumeSimpleBlock() {
+
+    }
+
+    consumeComponentValue() {
+
     }
 }
 
