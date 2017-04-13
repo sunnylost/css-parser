@@ -1,7 +1,14 @@
 //https://drafts.csswg.org/css-syntax-3/#tokenization
 let types     = Object.create( null ),
     typeNames = [
-        'EOF', 'COMMENT', 'IDENT', 'FUNCTION', 'AT_KEYWORD', 'Hash', 'STRING', 'BAD_STRING',
+        'EOF',
+        'COMMENT',
+        'IDENT',
+        'FUNCTION',
+        'AT_KEYWORD',
+        'Hash',
+        'STRING',
+        'BAD_STRING',
         'URL',
         'BAD_URL',
         'DELIM',

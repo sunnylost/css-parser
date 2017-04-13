@@ -62,9 +62,9 @@ let NULL                 = null,
 
 function simpleTokenWrapper( type ) {
     return {
-               type,
+        type,
         start: this.pos,
-        end:   this.pos + 1,
+        end  : this.pos + 1,
         value: this.next()
     }
 }
@@ -75,7 +75,8 @@ class Tokenizer {
         this.srcLen = src.length
         this.tokens = []
         this.cur    = null
-        this.pos    = 0
+        this.pos    = -1
+        this.lineNo = 1
     }
 
     run( TokenType ) {
@@ -85,6 +86,7 @@ class Tokenizer {
 
         while ( token = this.advance() ) {
             this.tokens.push( token )
+
             if ( token.type === TOKEN_TYPE.EOF ) {
                 return this.tokens
             }
@@ -108,54 +110,54 @@ class Tokenizer {
             }
 
             switch ( cp ) {
-                case NEWLINE:
-                case CT:
-                case SPACE:
-                    return this.consumeWhitespace()
+            case NEWLINE:
+            case CT:
+            case SPACE:
+                return this.consumeWhitespace()
 
-                case QUOTATION_MARK:
-                    return this.consumeString()
+            case QUOTATION_MARK:
+                return this.consumeString()
 
-                case COLON:
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
+            case COLON:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
 
-                case SEMICOLON:
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
+            case SEMICOLON:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
 
-                case LEFT_CURLY_BRACKET:
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_BRACE )
+            case LEFT_CURLY_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_BRACE )
 
-                case RIGHT_CURLY_BRACKET:
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
+            case RIGHT_CURLY_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
 
-                case NUMBER_SIGN:
-                    if ( isName( this.peek() ) ) {
-                        return this.consumeHash()
-                    }
+            case NUMBER_SIGN:
+                if ( isName( this.peek() ) ) {
+                    return this.consumeHash()
+                }
 
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
-                case DOLLAR_SIGN:
-                    if ( (ch = this.peek()) && ch.codePointAt( 0 ) == EQUALS_SIGN ) {
-                        return this.consumeSuffixMatch()
-                    }
+            case DOLLAR_SIGN:
+                if ( (ch = this.peek()) && ch.codePointAt( 0 ) == EQUALS_SIGN ) {
+                    return this.consumeSuffixMatch()
+                }
 
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
-                default:
-                    return {
-                        start: this.pos,
-                        end:   this.pos + 1,
-                        type:  404,
-                        value: this.next()
-                    }
+            default:
+                return {
+                    start: this.pos,
+                    end  : this.pos + 1,
+                    type : 404,
+                    value: this.next()
+                }
             }
         }
 
         return {
             start: this.pos,
-            end:   this.srcLen - 1,
-            type:  TOKEN_TYPE.EOF
+            end  : this.srcLen - 1,
+            type : TOKEN_TYPE.EOF
         }
     }
 
@@ -170,7 +172,7 @@ class Tokenizer {
 
     //TODO: preprocessHandler
     peek( offset = 1 ) {
-        if ( ( this.pos + offset ) < this.srcLen ) {
+        if ( ( this.pos + offset ) <= this.srcLen ) {
             return this.src[ this.pos + offset ]
         }
 
@@ -195,6 +197,7 @@ class Tokenizer {
             while ( 1 ) {
                 p1 = this.peek( 1 )
                 p2 = this.peek( 2 )
+
                 if ( !p1 || !p2 ||
                     ( p1.codePointAt( 0 ) !== ASTERISK &&
                     p2.codePointAt( 0 ) !== SOLIDUS ) ) {
@@ -210,7 +213,7 @@ class Tokenizer {
             value = comment.join( '' )
 
             return {
-                      start, end, value,
+                start, end, value,
                 type: TOKEN_TYPE.COMMENT
             }
         }
@@ -230,8 +233,8 @@ class Tokenizer {
         end = this.pos
 
         return {
-                   start, end,
-            type:  TOKEN_TYPE.WHITESPACE,
+            start, end,
+            type : TOKEN_TYPE.WHITESPACE,
             value: whitespace.join( '' )
         }
     }
@@ -280,8 +283,8 @@ class Tokenizer {
         end = this.pos
 
         return {
-                   start, end,
-            type:  TOKEN_TYPE.IDENT,
+            start, end,
+            type : TOKEN_TYPE.IDENT,
             value: result.join( '' )
         }
     }
