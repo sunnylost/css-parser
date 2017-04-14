@@ -33,12 +33,15 @@ let NULL                 = code( 0x0 ),
     RIGHT_CURLY_BRACKET  = code( 0x7d ),//}
     VERTICAL_LINE        = code( 0x7c ),//|
     TILDE                = code( 0x7e ),//~
+    EXCLAMATION_MARK     = code( 0x21 ),
     PERCENTAGE_SIGN      = '%',
     GREATER_THAN_SIGN    = '>',
     NEWLINE              = LF,
 
     CAPITAL_E            = 'E',
+    CAPITAL_U            = 'U',
     SMALL_E              = 'e',
+    SMALL_U              = 'u',
 
     //https://drafts.csswg.org/css-syntax-3/#input-preprocessing
     preprocessHanlder    = ( src ) => {
@@ -70,12 +73,16 @@ let NULL                 = code( 0x0 ),
 
 const MAX_ALLOWED_CODE_POINT = 0x10ffff
 
+/**
+ * TODO: fix token position
+ */
+
 function simpleTokenWrapper( type, value ) {
     return {
         type,
         start: this.pos,
         end  : this.pos + 1,
-        value: value || this.next()
+        value: value || this.cur
     }
 }
 
@@ -108,7 +115,7 @@ class Tokenizer {
     }
 
     advance() {
-        let ch, token
+        let ch
 
         if ( ch = this.peek() ) {
             if ( isNameStart( ch ) ) {
@@ -117,6 +124,10 @@ class Tokenizer {
 
             if ( isWhitespace( ch ) ) {
                 return this.consumeWhitespace()
+            }
+
+            if ( isDigit( ch ) ) {
+                return this.consumeNumber()
             }
 
             this.cur = this.next()
@@ -154,14 +165,14 @@ class Tokenizer {
                 return this.consumeString( APOSTROPHE )
 
             case LEFT_PARENTHESIS:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_PARENTHESIS, ch )
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_PARENTHESIS )
 
             case RIGHT_PARENTHESIS:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_PARENTHESIS, ch )
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_PARENTHESIS )
 
             case ASTERISK:
                 if ( this.peek() === EQUALS_SIGN ) {
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.SUBSTRING_MATCH )
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.SUBSTRING_MATCH, this.next() )
                 }
 
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
@@ -175,7 +186,7 @@ class Tokenizer {
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
             case COMMA:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.COMMA, ch )
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.COMMA )
 
             case HYPHEN_MINUS:
                 if ( this.checkStarWithNumber( ch, this.peek(), this.peek( 2 ) ) ) {
@@ -185,7 +196,7 @@ class Tokenizer {
                     this.reconsume()
                     return this.consumeIdent()
                 } else if ( this.peek() === HYPHEN_MINUS && this.peek( 2 ) === GREATER_THAN_SIGN ) {
-                    return simpleTokenWrapper.call( this, TOKEN_TYPE.CDC, ch + this.next() + this.next() )
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.CDC, ch + this.next( 2 ) )
                 }
 
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
@@ -206,11 +217,81 @@ class Tokenizer {
 
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
+            case COLON:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
+
+            case SEMICOLON:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
+
+            case LESS_THAN_SIGN:
+                if ( this.peek() === EXCLAMATION_MARK && this.peek( 2 ) === HYPHEN_MINUS && this.peek( 3 ) === HYPHEN_MINUS ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.CDO, ch + this.next( 3 ) )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case COMMERCIAL_AT:
+                if ( this.checkIdentifier() ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.AT_KEYWORD, this.consumeName() )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case LEFT_SQUARE_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_SQUARE_BRACKET )
+
+            case REVERSE_SOLIDUS:
+                if ( this.checkValidEscape() ) {
+                    this.reconsume()
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.IDENT, this.consumeIdent() )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case RIGHT_SQUARE_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_SQUARE_BRACKET )
+
+            case CIRCUMFLEX_ACCENT:
+                if ( this.peek() === EQUALS_SIGN ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.PREFIX_MATCH, ch + this.next() )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case LEFT_CURLY_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_CURLY_BRACKET )
+
+            case RIGHT_CURLY_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_CURLY_BRACKET )
+
+            case CAPITAL_U:
+            case SMALL_U:
+                //TODO
+
+                this.reconsume()
+                return this.consumeIdent()
+
+            case VERTICAL_LINE:
+                if ( this.peek() === EQUALS_SIGN ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.DASH_MATCH, ch + this.next() )
+                } else if ( this.peek() === VERTICAL_LINE ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.COLUMN, ch + this.next() )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case TILDE:
+                if ( this.peek() === EQUALS_SIGN ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.INCLUDE_MATCH, ch + this.next() )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
             default:
                 return {
                     start: this.pos,
                     end  : this.pos + 1,
-                    type : 404,
+                    type : TOKEN_TYPE.DELIM,
                     value: ch
                 }
             }
@@ -225,7 +306,17 @@ class Tokenizer {
 
     next( offset = 1 ) {
         if ( ( this.pos + offset ) < this.srcLen ) {
-            return this.src[ this.pos += offset ]
+            if ( offset === 1 ) {
+                return this.src[ ++this.pos ]
+            } else {
+                let result = []
+
+                while ( offset-- ) {
+                    result.push( this.src[ ++this.pos ] )
+                }
+
+                return result.join( '' )
+            }
         }
 
         return null
@@ -386,7 +477,7 @@ class Tokenizer {
         }
 
         if ( this.peek() === FULL_STOP && isDigit( this.peek( 2 ) ) ) {
-            repr += this.next() + this.next()
+            repr += this.next( 2 )
             type = 'number'
 
             while ( ( ch = this.peek() ) && isDigit( ch ) ) {
@@ -402,11 +493,11 @@ class Tokenizer {
             let canConsume
 
             if ( isDigit( b ) ) {
-                repr += this.next() + this.next()
+                repr += this.next( 2 )
                 type       = 'number'
                 canConsume = true
             } else if ( ( b === HYPHEN_MINUS || b === PLUS_SIGN ) && isDigit( c ) ) {
-                repr += this.next() + this.next() + this.next()
+                repr += this.next( 3 )
                 type       = 'number'
                 canConsume = true
             }

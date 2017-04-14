@@ -31,8 +31,8 @@ let types     = Object.create( null ),
         'RIGHT_SQUARE_BRACKET', //]
         'LEFT_PARENTHESIS', //(
         'RIGHT_PARENTHESIS', //)
-        'LEFT_BRACE', //{
-        'RIGHT_BRACE'  //}
+        'LEFT_CURLY_BRACKET', //{
+        'RIGHT_CURLY_BRACKET'  //}
     ]
 
 typeNames.forEach( ( type ) => {
