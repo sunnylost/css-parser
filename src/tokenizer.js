@@ -33,7 +33,12 @@ let NULL                 = code( 0x0 ),
     RIGHT_CURLY_BRACKET  = code( 0x7d ),//}
     VERTICAL_LINE        = code( 0x7c ),//|
     TILDE                = code( 0x7e ),//~
+    PERCENTAGE_SIGN      = '%',
+    GREATER_THAN_SIGN    = '>',
     NEWLINE              = LF,
+
+    CAPITAL_E            = 'E',
+    SMALL_E              = 'e',
 
     //https://drafts.csswg.org/css-syntax-3/#input-preprocessing
     preprocessHanlder    = ( src ) => {
@@ -65,12 +70,12 @@ let NULL                 = code( 0x0 ),
 
 const MAX_ALLOWED_CODE_POINT = 0x10ffff
 
-function simpleTokenWrapper( type ) {
+function simpleTokenWrapper( type, value ) {
     return {
         type,
         start: this.pos,
         end  : this.pos + 1,
-        value: this.next()
+        value: value || this.next()
     }
 }
 
@@ -106,10 +111,6 @@ class Tokenizer {
         let ch, token
 
         if ( ch = this.peek() ) {
-            if ( token = this.consumeComment() ) {
-                return token
-            }
-
             if ( isNameStart( ch ) ) {
                 return this.consumeIdent()
             }
@@ -118,13 +119,13 @@ class Tokenizer {
                 return this.consumeWhitespace()
             }
 
+            this.cur = this.next()
+
             switch ( ch ) {
             case QUOTATION_MARK:
-                return this.consumeString()
+                return this.consumeString( QUOTATION_MARK )
 
             case NUMBER_SIGN:
-                this.next() //consume #
-
                 if ( isName( this.peek() ) || this.checkValidEscape() ) {
                     let token = {
                         start: this.pos,
@@ -143,30 +144,74 @@ class Tokenizer {
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
             case DOLLAR_SIGN:
-                if ( (ch = this.peek()) && ch == EQUALS_SIGN ) {
-                    return this.consumeSuffixMatch()
+                if ( ( ch = this.peek() ) && ch == EQUALS_SIGN ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.SUFFIX_MATCH )
                 }
 
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
-            case COLON:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
+            case APOSTROPHE:
+                return this.consumeString( APOSTROPHE )
 
-            case SEMICOLON:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
+            case LEFT_PARENTHESIS:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_PARENTHESIS, ch )
 
-            case LEFT_CURLY_BRACKET:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_BRACE )
+            case RIGHT_PARENTHESIS:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_PARENTHESIS, ch )
 
-            case RIGHT_CURLY_BRACKET:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
+            case ASTERISK:
+                if ( this.peek() === EQUALS_SIGN ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.SUBSTRING_MATCH )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case PLUS_SIGN:
+                if ( this.checkStarWithNumber( ch, this.peek(), this.peek( 2 ) ) ) {
+                    this.reconsume()
+                    return this.consumeNumber()
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case COMMA:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.COMMA, ch )
+
+            case HYPHEN_MINUS:
+                if ( this.checkStarWithNumber( ch, this.peek(), this.peek( 2 ) ) ) {
+                    this.reconsume()
+                    return this.consumeNumber()
+                } else if ( this.checkIdentifier() ) {
+                    this.reconsume()
+                    return this.consumeIdent()
+                } else if ( this.peek() === HYPHEN_MINUS && this.peek( 2 ) === GREATER_THAN_SIGN ) {
+                    return simpleTokenWrapper.call( this, TOKEN_TYPE.CDC, ch + this.next() + this.next() )
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case FULL_STOP:
+                if ( this.checkStarWithNumber( ch, this.peek(), this.peek( 2 ) ) ) {
+                    this.reconsume()
+                    return this.consumeNumber()
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case SOLIDUS:
+                if ( this.peek() === ASTERISK ) {
+                    this.reconsume()
+                    return this.consumeComment()
+                }
+
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
             default:
                 return {
                     start: this.pos,
                     end  : this.pos + 1,
                     type : 404,
-                    value: this.next()
+                    value: ch
                 }
             }
         }
@@ -178,7 +223,6 @@ class Tokenizer {
         }
     }
 
-    //TODO: preprocessHandler
     next( offset = 1 ) {
         if ( ( this.pos + offset ) < this.srcLen ) {
             return this.src[ this.pos += offset ]
@@ -187,13 +231,16 @@ class Tokenizer {
         return null
     }
 
-    //TODO: preprocessHandler
     peek( offset = 1 ) {
         if ( ( this.pos + offset ) <= this.srcLen ) {
             return this.src[ this.pos + offset ]
         }
 
         return null
+    }
+
+    reconsume( offset = 1 ) {
+        this.pos -= offset
     }
 
     consumeComment() {
@@ -212,15 +259,13 @@ class Tokenizer {
             this.pos += 2
 
             while ( 1 ) {
-                p1 = this.peek( 1 )
+                p1 = this.peek()
                 p2 = this.peek( 2 )
 
-                if ( !p1 || !p2 ||
-                    ( p1 !== ASTERISK &&
-                    p2 !== SOLIDUS ) ) {
-                    comment.push( this.next() )
-                } else {
+                if ( !p1 || ( p1 === ASTERISK && p2 === SOLIDUS ) ) {
                     break
+                } else {
+                    comment.push( this.next() )
                 }
             }
 
@@ -256,13 +301,11 @@ class Tokenizer {
         }
     }
 
-    consumeString() {
+    consumeString( ending ) {
         let result = [],
             start  = this.pos,
             type   = TOKEN_TYPE.STRING,
-            isEncounterEnd, value, ch, end
-
-        this.next() //first quotation
+            isEncounterEnding, value, ch, end
 
         while ( ( ch = this.peek() ) ) {
             //parse error, should reconsume the current input code point. so check this before call this.next()
@@ -287,16 +330,16 @@ class Tokenizer {
                 }
             }
 
-            if ( ch === QUOTATION_MARK ) {
+            if ( ch === ending ) {
                 this.next()
-                isEncounterEnd = true
+                isEncounterEnding = true
                 break
             }
 
             result.push( this.next() )
         }
 
-        if ( !isEncounterEnd ) {
+        if ( !isEncounterEnding ) {
             type = TOKEN_TYPE.BAD_STRING
         }
 
@@ -309,6 +352,77 @@ class Tokenizer {
     }
 
     consumeNumber() {
+        let number = this._consumeNumber()
+
+        if ( this.checkIdentifier() ) {
+            let unitToken = simpleTokenWrapper.call( this, TOKEN_TYPE.DIMENSION, number )
+
+            unitToken._unit = this.consumeName()
+
+            return unitToken
+        } else if ( this.peek() === PERCENTAGE_SIGN ) {
+            number.value += this.next()
+            return simpleTokenWrapper.call( this, TOKEN_TYPE.PERCENTAGE, number )
+        }
+
+        return simpleTokenWrapper.call( this, TOKEN_TYPE.NUMBER, number )
+    }
+
+    /**
+     * return a tuple
+     */
+    _consumeNumber() {
+        let repr = '',
+            type = 'integer',
+            ch   = this.peek(),
+            value
+
+        if ( ch === PLUS_SIGN || ch === HYPHEN_MINUS ) {
+            repr += this.next()
+        }
+
+        while ( ( ch = this.peek() ) && isDigit( ch ) ) {
+            repr += this.next()
+        }
+
+        if ( this.peek() === FULL_STOP && isDigit( this.peek( 2 ) ) ) {
+            repr += this.next() + this.next()
+            type = 'number'
+
+            while ( ( ch = this.peek() ) && isDigit( ch ) ) {
+                repr += this.next()
+            }
+        }
+
+        let a = this.peek(),
+            b = this.peek( 2 ),
+            c = this.peek( 3 )
+
+        if ( a === CAPITAL_E || a === SMALL_E ) {
+            let canConsume
+
+            if ( isDigit( b ) ) {
+                repr += this.next() + this.next()
+                type       = 'number'
+                canConsume = true
+            } else if ( ( b === HYPHEN_MINUS || b === PLUS_SIGN ) && isDigit( c ) ) {
+                repr += this.next() + this.next() + this.next()
+                type       = 'number'
+                canConsume = true
+            }
+
+            if ( canConsume ) {
+                while ( ( ch = this.peek() ) && isDigit( ch ) ) {
+                    repr += this.next()
+                }
+            }
+        }
+
+        value = parseInt( repr )
+
+        return {
+            repr, value, type
+        }
     }
 
     consumeIdent() {
@@ -333,17 +447,6 @@ class Tokenizer {
             type : TOKEN_TYPE.IDENT,
             value: result.join( '' )
         }
-    }
-
-    consumeHash() {
-        //TODO
-        let token = {
-            start: this.pos,
-            type : TOKEN_TYPE.HASH,
-            _type: 'unrestricted'//type flag
-        }, value  = ''
-
-        return token
     }
 
     consumeName() {
@@ -396,10 +499,6 @@ class Tokenizer {
         return REPLACEMENT
     }
 
-    consumeSuffixMatch() {
-        //TODO
-    }
-
     checkValidEscape( a, b ) {
         if ( !arguments.length ) {
             a = this.peek()
@@ -431,6 +530,30 @@ class Tokenizer {
         }
 
         if ( ch === REVERSE_SOLIDUS && this.checkValidEscape() ) {
+            return true
+        }
+
+        return false
+    }
+
+    checkStarWithNumber( a, b, c ) {
+        if ( !arguments.length ) {
+            a = this.cur
+            b = this.peek()
+            c = this.peek( 2 )
+        }
+
+        if ( a === PLUS_SIGN || a === HYPHEN_MINUS ) {
+            if ( isDigit( b ) || ( b === FULL_STOP && isDigit( c ) ) ) {
+                return true
+            }
+        }
+
+        if ( a === FULL_STOP && isDigit( b ) ) {
+            return true
+        }
+
+        if ( isDigit( a ) ) {
             return true
         }
 
