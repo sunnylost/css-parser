@@ -1,62 +1,56 @@
-let NULL                 = null,
-    CT                   = 0x9,//CHARACTER TABULATION
-    LF                   = 0xa,//LINE FEED
-    FF                   = 0xc,//FORM FEED
-    CR                   = 0xd,//CARRIAGE RETURN
-    SPACE                = 0x20,
-    QUOTATION_MARK       = 0x22,//"
-    NUMBER_SIGN          = 0x23,//#
-    DOLLAR_SIGN          = 0x24,//$
-    APOSTROPHE           = 0x27,//'
-    LEFT_PARENTHESIS     = 0x28,//(
-    RIGHT_PARENTHESIS    = 0x29,//)
-    ASTERISK             = 0x2a,//*
-    PLUS_SIGN            = 0x2b,//+
-    COMMA                = 0x2c,//,
-    HYPHEN_MINUS         = 0x2d,//-
-    FULL_STOP            = 0x2e,//.
-    SOLIDUS              = 0x2f,///
-    COLON                = 0x3a,//:
-    SEMICOLON            = 0x3b,//;
-    LESS_THAN_SIGN       = 0x3c,//<
-    EQUALS_SIGN          = 0x3d,//=
-    COMMERCIAL_AT        = 0x40,//@
-    LEFT_SQUARE_BRACKET  = 0x5b,//[
-    REVERSE_SOLIDUS      = 0x5c,//\
-    RIGHT_SQUARE_BRACKET = 0x5d,//]
-    CIRCUMFLEX_ACCENT    = 0x5e,//^
-    LOW_LINE             = 0x5f,//_
-    LEFT_CURLY_BRACKET   = 0x7b,//{
-    RIGHT_CURLY_BRACKET  = 0x7d,//}
-    VERTICAL_LINE        = 0x7c,//|
-    TILDE                = 0x7e,//~
+let code = ( cp ) => String.fromCharCode( cp )
+
+let NULL                 = code( 0x0 ),
+    REPLACEMENT          = code( 0xfffd ),
+    CT                   = code( 0x9 ),//CHARACTER TABULATION
+    LF                   = code( 0xa ),//LINE FEED
+    FF                   = code( 0xc ),//FORM FEED
+    CR                   = code( 0xd ),//CARRIAGE RETURN
+    SPACE                = code( 0x20 ),
+    QUOTATION_MARK       = code( 0x22 ),//"
+    NUMBER_SIGN          = code( 0x23 ),//#
+    DOLLAR_SIGN          = code( 0x24 ),//$
+    APOSTROPHE           = code( 0x27 ),//'
+    LEFT_PARENTHESIS     = code( 0x28 ),//(
+    RIGHT_PARENTHESIS    = code( 0x29 ),//)
+    ASTERISK             = code( 0x2a ),//*
+    PLUS_SIGN            = code( 0x2b ),//+
+    COMMA                = code( 0x2c ),//,
+    HYPHEN_MINUS         = code( 0x2d ),//-
+    FULL_STOP            = code( 0x2e ),//.
+    SOLIDUS              = code( 0x2f ),///
+    COLON                = code( 0x3a ),//:
+    SEMICOLON            = code( 0x3b ),//;
+    LESS_THAN_SIGN       = code( 0x3c ),//<
+    EQUALS_SIGN          = code( 0x3d ),//=
+    COMMERCIAL_AT        = code( 0x40 ),//@
+    LEFT_SQUARE_BRACKET  = code( 0x5b ),//[
+    REVERSE_SOLIDUS      = code( 0x5c ),//\
+    RIGHT_SQUARE_BRACKET = code( 0x5d ),//]
+    CIRCUMFLEX_ACCENT    = code( 0x5e ),//^
+    LOW_LINE             = code( 0x5f ),//_
+    LEFT_CURLY_BRACKET   = code( 0x7b ),//{
+    RIGHT_CURLY_BRACKET  = code( 0x7d ),//}
+    VERTICAL_LINE        = code( 0x7c ),//|
+    TILDE                = code( 0x7e ),//~
     NEWLINE              = LF,
 
     //https://drafts.csswg.org/css-syntax-3/#input-preprocessing
-    preprocessHanlder    = ( cur, next ) => {
-        let curCP  = cur.codePointAt( 0 ),
-            nextCP = next.codePointAt( 0 )
+    preprocessHanlder    = ( src ) => {
+        src = src.replace( new RegExp( `(${ CR }|${ FF }|${ CR + LF })`, 'mg' ), LF )
 
-        if (
-            curCP === CR ||
-            curCP === FF ||
-            ( curCP === CR && nextCP === LF )
-        ) {
-            return String.fromCodePoint( LF )
-        }
-
-        return cur
+        return src.replace( new RegExp( NULL, 'mg' ), REPLACEMENT )
     },
 
-    isDigit              = cp => cp >= 0x30 && cp <= 0x39,
-    isWhitespace         = cp => cp === NEWLINE || cp === CT || cp === SPACE,
-    isUppercase          = cp => cp >= 0x41 && cp <= 0x5a,
-    isLowercase          = cp => cp >= 0x61 && cp <= 0x7a,
-    isLetter             = cp => isLowercase( cp ) || isUppercase( cp ),
-    isNonASCII           = cp => cp >= 0x80,
-    isNameStart          = cp => isLetter( cp ) || isNonASCII( cp ) || cp === LOW_LINE,
+    isDigit              = ch => ch.charCodeAt( 0 ) >= 0x30 && ch.charCodeAt( 0 ) <= 0x39,
+    isWhitespace         = ch => ch === NEWLINE || ch === CT || ch === SPACE,
+    isUppercase          = ch => ch.charCodeAt( 0 ) >= 0x41 && ch.charCodeAt( 0 ) <= 0x5a,
+    isLowercase          = ch => ch.charCodeAt( 0 ) >= 0x61 && ch.charCodeAt( 0 ) <= 0x7a,
+    isLetter             = ch => isLowercase( ch ) || isUppercase( ch ),
+    isNonASCII           = ch => ch.charCodeAt( 0 ) >= 0x80,
+    isNameStart          = ch => isLetter( ch ) || isNonASCII( ch ) || ch === LOW_LINE,
     //TODO: reverse slash
-    isName               = cp => isNameStart( cp ) || isDigit( cp ) || cp === HYPHEN_MINUS,
+    isName               = ch => isNameStart( ch ) || isDigit( ch ) || ch === HYPHEN_MINUS,
 
     TOKEN_TYPE
 
@@ -71,6 +65,8 @@ function simpleTokenWrapper( type ) {
 
 class Tokenizer {
     constructor( src ) {
+        src = preprocessHanlder( src )
+
         this.src    = src
         this.srcLen = src.length
         this.tokens = []
@@ -96,24 +92,22 @@ class Tokenizer {
     }
 
     advance() {
-        let ch, cp, token
+        let ch, token
 
         if ( ch = this.peek() ) {
-            cp = ch.codePointAt( 0 )
-
             if ( token = this.consumeComment() ) {
                 return token
             }
 
-            if ( isNameStart( cp ) ) {
+            if ( isNameStart( ch ) ) {
                 return this.consumeIdent()
             }
 
-            if ( isWhitespace( cp ) ) {
+            if ( isWhitespace( ch ) ) {
                 return this.consumeWhitespace()
             }
 
-            switch ( cp ) {
+            switch ( ch ) {
             case QUOTATION_MARK:
                 return this.consumeString()
 
@@ -125,7 +119,7 @@ class Tokenizer {
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
 
             case DOLLAR_SIGN:
-                if ( (ch = this.peek()) && ch.codePointAt( 0 ) == EQUALS_SIGN ) {
+                if ( (ch = this.peek()) && ch == EQUALS_SIGN ) {
                     return this.consumeSuffixMatch()
                 }
 
@@ -166,7 +160,7 @@ class Tokenizer {
             return this.src[ this.pos += offset ]
         }
 
-        return NULL
+        return null
     }
 
     //TODO: preprocessHandler
@@ -175,7 +169,7 @@ class Tokenizer {
             return this.src[ this.pos + offset ]
         }
 
-        return NULL
+        return null
     }
 
     consumeComment() {
@@ -186,8 +180,8 @@ class Tokenizer {
         p2 = this.peek( 2 )
 
         if ( p1 && p2 &&
-            p1.codePointAt( 0 ) === SOLIDUS &&
-            p2.codePointAt( 0 ) === ASTERISK
+            p1 === SOLIDUS &&
+            p2 === ASTERISK
         ) {
             start = this.pos
             comment.push( p1, p2 )
@@ -198,8 +192,8 @@ class Tokenizer {
                 p2 = this.peek( 2 )
 
                 if ( !p1 || !p2 ||
-                    ( p1.codePointAt( 0 ) !== ASTERISK &&
-                    p2.codePointAt( 0 ) !== SOLIDUS ) ) {
+                    ( p1 !== ASTERISK &&
+                    p2 !== SOLIDUS ) ) {
                     comment.push( this.next() )
                 } else {
                     break
@@ -217,15 +211,15 @@ class Tokenizer {
             }
         }
 
-        return NULL
+        return null
     }
 
     consumeWhitespace() {
         let start      = this.pos,
             whitespace = [],
-            cp, end
+            ch, end
 
-        while ( ( cp = this.peek() ) && isWhitespace( cp.codePointAt( 0 ) ) ) {
+        while ( ( ch = this.peek() ) && isWhitespace( ch ) ) {
             whitespace.push( this.next() )
         }
 
@@ -244,18 +238,28 @@ class Tokenizer {
             type   = TOKEN_TYPE.STRING,
             isEncounterEnd, value, ch, end
 
-        result.push( this.next() ) //first quotation
+        this.next() //first quotation
 
         while ( ( ch = this.peek() ) ) {
             //TODO: REVERSE SOLIDUS
             //parse error, should reconsume the current input code point. so check this before call this.next()
-            if ( ch.codePointAt( 0 ) === NEWLINE ) {
+            if ( ch === NEWLINE ) {
                 type = TOKEN_TYPE.BAD_STRING
                 break
             }
 
-            if ( ch.codePointAt( 0 ) === QUOTATION_MARK ) {
-                result.push( this.next() )
+            if ( ch === REVERSE_SOLIDUS ) {
+                if ( !this.peek( 2 ) ) {
+                    continue
+                }
+
+                if ( this.peek( 2 ).charCodeAt( 0 ) === NEWLINE ) {
+
+                }
+            }
+
+            if ( ch === QUOTATION_MARK ) {
+                this.next()
                 isEncounterEnd = true
                 break
             }
@@ -283,7 +287,7 @@ class Tokenizer {
             start  = this.pos,
             ch, end, value
 
-        while ( ( ch = this.peek() ) && isName( ch.codePointAt( 0 ) ) ) {
+        while ( ( ch = this.peek() ) && isName( ch ) ) {
             result.push( this.next() )
         }
 
@@ -304,10 +308,57 @@ class Tokenizer {
 
     consumeHash() {
         //TODO
+        let token = {
+            start: this.pos,
+            type : TOKEN_TYPE.HASH,
+            _type: 'unrestricted'//type flag
+        }, value  = ''
+
+        return token
+    }
+
+    consumeName() {
+        let result = '',
+            ch
+
+        while ( ch = this.peek() ) {
+
+            if ( isName( ch ) ) {
+                result += this.next()
+            } else {
+                break
+            }
+        }
+
+        return result
     }
 
     consumeSuffixMatch() {
         //TODO
+    }
+
+    checkValidEscape() {
+        if ( this.peek() !== REVERSE_SOLIDUS ) {
+            return false
+        }
+
+        if ( this.peek( 2 ) === NEWLINE ) {
+            return false
+        }
+
+        return true
+    }
+
+    checkIdentifier() {
+        let ch = this.peek()
+
+        if ( ch === HYPHEN_MINUS && isName( this.peek( 2 ) ) ) {
+            return true
+        }
+
+        if ( isName( ch ) ) {
+            return true
+        }
     }
 }
 
