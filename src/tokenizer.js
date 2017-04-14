@@ -43,16 +43,27 @@ let NULL                 = code( 0x0 ),
     },
 
     isDigit              = ch => ch.charCodeAt( 0 ) >= 0x30 && ch.charCodeAt( 0 ) <= 0x39,
+    isHexDigit           = ( ch ) => {
+        let cp = ch.codePointAt( 0 )
+
+        //0x41: A
+        //0x46: F
+        //0x61: a
+        //0x66: f
+        return isDigit( ch ) || ( cp >= 0x41 && cp <= 0x46 ) || ( cp >= 0x61 && cp <= 0x66 )
+    },
     isWhitespace         = ch => ch === NEWLINE || ch === CT || ch === SPACE,
     isUppercase          = ch => ch.charCodeAt( 0 ) >= 0x41 && ch.charCodeAt( 0 ) <= 0x5a,
     isLowercase          = ch => ch.charCodeAt( 0 ) >= 0x61 && ch.charCodeAt( 0 ) <= 0x7a,
     isLetter             = ch => isLowercase( ch ) || isUppercase( ch ),
     isNonASCII           = ch => ch.charCodeAt( 0 ) >= 0x80,
     isNameStart          = ch => isLetter( ch ) || isNonASCII( ch ) || ch === LOW_LINE,
-    //TODO: reverse slash
     isName               = ch => isNameStart( ch ) || isDigit( ch ) || ch === HYPHEN_MINUS,
+    isSurrogate          = cp => cp >= 0xd800 && cp <= 0xdfff,
 
     TOKEN_TYPE
+
+const MAX_ALLOWED_CODE_POINT = 0x10ffff
 
 function simpleTokenWrapper( type ) {
     return {
@@ -241,7 +252,6 @@ class Tokenizer {
         this.next() //first quotation
 
         while ( ( ch = this.peek() ) ) {
-            //TODO: REVERSE SOLIDUS
             //parse error, should reconsume the current input code point. so check this before call this.next()
             if ( ch === NEWLINE ) {
                 type = TOKEN_TYPE.BAD_STRING
@@ -250,11 +260,17 @@ class Tokenizer {
 
             if ( ch === REVERSE_SOLIDUS ) {
                 if ( !this.peek( 2 ) ) {
-                    continue
+                    break
                 }
 
                 if ( this.peek( 2 ).charCodeAt( 0 ) === NEWLINE ) {
+                    this.next()
+                    continue
+                }
 
+                if ( this.checkValidEscape() ) {
+                    result.push( this.consumeEscapedCodePoint() )
+                    continue
                 }
             }
 
@@ -322,15 +338,49 @@ class Tokenizer {
             ch
 
         while ( ch = this.peek() ) {
-
             if ( isName( ch ) ) {
                 result += this.next()
+            } else if ( this.checkValidEscape() ) {
+                result += this.consumeEscapedCodePoint()
             } else {
                 break
             }
         }
 
         return result
+    }
+
+    consumeEscapedCodePoint() {
+        this.next() //consume reverse solidus
+
+        let result   = '',
+            hexCount = 0,
+            ch
+
+        while ( ch = this.peek() ) {
+            if ( isHexDigit( ch ) ) {
+                if ( hexCount <= 5 ) {
+                    result += this.next()
+                    hexCount++
+                }
+            } else if ( isWhitespace( ch ) ) {
+                result += this.next()
+            } else {
+                break
+            }
+        }
+
+        if ( hexCount ) {
+            let value = parseInt( result, 16 )
+
+            if ( value === 0 || value > MAX_ALLOWED_CODE_POINT || isSurrogate( value ) ) {
+                return REPLACEMENT
+            } else {
+                return String.fromCharCode( value )
+            }
+        }
+
+        return REPLACEMENT
     }
 
     consumeSuffixMatch() {
