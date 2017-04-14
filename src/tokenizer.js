@@ -109,26 +109,13 @@ class Tokenizer {
                 return this.consumeIdent()
             }
 
-            switch ( cp ) {
-            case NEWLINE:
-            case CT:
-            case SPACE:
+            if ( isWhitespace( cp ) ) {
                 return this.consumeWhitespace()
+            }
 
+            switch ( cp ) {
             case QUOTATION_MARK:
                 return this.consumeString()
-
-            case COLON:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
-
-            case SEMICOLON:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
-
-            case LEFT_CURLY_BRACKET:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_BRACE )
-
-            case RIGHT_CURLY_BRACKET:
-                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
 
             case NUMBER_SIGN:
                 if ( isName( this.peek() ) ) {
@@ -143,6 +130,18 @@ class Tokenizer {
                 }
 
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
+
+            case COLON:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.COLON )
+
+            case SEMICOLON:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.SEMICOLON )
+
+            case LEFT_CURLY_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.LEFT_BRACE )
+
+            case RIGHT_CURLY_BRACKET:
+                return simpleTokenWrapper.call( this, TOKEN_TYPE.RIGHT_BRACE )
 
             default:
                 return {
@@ -243,15 +242,29 @@ class Tokenizer {
         let result = [],
             start  = this.pos,
             type   = TOKEN_TYPE.STRING,
-            value, ch, end
+            isEncounterEnd, value, ch, end
+
+        result.push( this.next() ) //first quotation
 
         while ( ( ch = this.peek() ) ) {
-            result.push( this.next() )
             //TODO: REVERSE SOLIDUS
+            //parse error, should reconsume the current input code point. so check this before call this.next()
             if ( ch.codePointAt( 0 ) === NEWLINE ) {
                 type = TOKEN_TYPE.BAD_STRING
                 break
             }
+
+            if ( ch.codePointAt( 0 ) === QUOTATION_MARK ) {
+                result.push( this.next() )
+                isEncounterEnd = true
+                break
+            }
+
+            result.push( this.next() )
+        }
+
+        if ( !isEncounterEnd ) {
+            type = TOKEN_TYPE.BAD_STRING
         }
 
         end   = this.pos

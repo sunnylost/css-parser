@@ -3,6 +3,10 @@ import Tokenizer from './tokenizer'
 import Parser from './parser'
 
 class CSSParser {
+    constructor() {
+        this.tokenType = TokenType
+    }
+
     tokenize( src ) {
         if ( !src || !String( src ).trim() ) {
             //TODO
