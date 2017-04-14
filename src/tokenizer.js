@@ -123,8 +123,21 @@ class Tokenizer {
                 return this.consumeString()
 
             case NUMBER_SIGN:
-                if ( isName( this.peek() ) ) {
-                    return this.consumeHash()
+                this.next() //consume #
+
+                if ( isName( this.peek() ) || this.checkValidEscape() ) {
+                    let token = {
+                        start: this.pos,
+                        type : TOKEN_TYPE.HASH,
+                        _type: 'unrestricted'//type flag
+                    }
+
+                    if ( this.checkIdentifier() ) {
+                        token._type = 'id'
+                    }
+
+                    token.value = this.consumeName()
+                    return token
                 }
 
                 return simpleTokenWrapper.call( this, TOKEN_TYPE.DELIM )
@@ -387,12 +400,17 @@ class Tokenizer {
         //TODO
     }
 
-    checkValidEscape() {
-        if ( this.peek() !== REVERSE_SOLIDUS ) {
+    checkValidEscape( a, b ) {
+        if ( !arguments.length ) {
+            a = this.peek()
+            b = this.peek( 2 )
+        }
+
+        if ( a !== REVERSE_SOLIDUS ) {
             return false
         }
 
-        if ( this.peek( 2 ) === NEWLINE ) {
+        if ( b === NEWLINE ) {
             return false
         }
 
@@ -402,13 +420,21 @@ class Tokenizer {
     checkIdentifier() {
         let ch = this.peek()
 
-        if ( ch === HYPHEN_MINUS && isName( this.peek( 2 ) ) ) {
+        if ( ch === HYPHEN_MINUS ) {
+            if ( isNameStart( this.peek( 2 ) ) || this.checkValidEscape( this.peek( 2 ), this.peek( 3 ) ) ) {
+                return true
+            }
+        }
+
+        if ( isNameStart( ch ) ) {
             return true
         }
 
-        if ( isName( ch ) ) {
+        if ( ch === REVERSE_SOLIDUS && this.checkValidEscape() ) {
             return true
         }
+
+        return false
     }
 }
 
