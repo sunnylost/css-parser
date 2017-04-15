@@ -4,8 +4,10 @@ let NULL                 = code( 0x0 ),
     REPLACEMENT          = code( 0xfffd ),
     CT                   = code( 0x9 ),//CHARACTER TABULATION
     LF                   = code( 0xa ),//LINE FEED
+    LINE_TABULATION      = code( 0xb ),
     FF                   = code( 0xc ),//FORM FEED
     CR                   = code( 0xd ),//CARRIAGE RETURN
+    DELETE               = code( 0x7f ),
     SPACE                = code( 0x20 ),
     QUOTATION_MARK       = code( 0x22 ),//"
     NUMBER_SIGN          = code( 0x23 ),//#
@@ -71,6 +73,11 @@ let NULL                 = code( 0x0 ),
     isNameStart          = ch => isLetter( ch ) || isNonASCII( ch ) || ch === LOW_LINE,
     isName               = ch => isNameStart( ch ) || isDigit( ch ) || ch === HYPHEN_MINUS,
     isSurrogate          = cp => cp >= 0xd800 && cp <= 0xdfff,
+    isNonPrintable       = ( ch ) => {
+        let cp = ch.codePointAt( 0 )
+
+        return ( cp >= 0x0 && ch <= 0x8 ) || ch === LINE_TABULATION || ch === DELETE || ( cp >= 0xe && cp <= 0x1f )
+    },
 
     TOKEN_TYPE
 
@@ -524,26 +531,33 @@ class Tokenizer {
     }
 
     consumeIdent() {
-        let result = [],
-            start  = this.pos,
-            ch, end, value
+        let value = '',
+            start = this.pos,
+            end
 
-        while ( ( ch = this.peek() ) && isName( ch ) ) {
-            result.push( this.next() )
-        }
+        value = this.consumeName()
 
-        //TODO: URL
-        if ( ( value = result.join( '' ) ) === 'url' &&
-            this.peek() === '('
+        if ( value === 'url' &&
+            this.peek() === LEFT_PARENTHESIS
         ) {
+            this.next()
+            return this.consumeURL()
+        } else if ( this.peek() === LEFT_PARENTHESIS ) {
+            this.next()
+            return {
+                start,
+                end : start + value.length,
+                type: TOKEN_TYPE.FUNCTION,
+                value
+            }
         }
 
-        end = this.pos
+        end = start + value.length
 
         return {
             start, end,
-            type : TOKEN_TYPE.IDENT,
-            value: result.join( '' )
+            type: TOKEN_TYPE.IDENT,
+            value
         }
     }
 
@@ -658,6 +672,108 @@ class Tokenizer {
         token.value      = value
         token.end        = token.start + value.length
         return token
+    }
+
+    consumeURL() {
+        let token = {
+                type : TOKEN_TYPE.URL,
+                start: this.pos,
+                value: ''
+            },
+            value = '',
+            ch
+
+        this.consumeWhitespace()
+        ch = this.peek()
+
+        if ( !ch ) { //EOF
+            return token
+        }
+
+        if ( ch === QUOTATION_MARK || ch === APOSTROPHE ) {
+            this.next()
+            let stringToken = this.consumeString( ch )
+
+            if ( stringToken.type === TOKEN_TYPE.BAD_STRING ) {
+                this.consumeRemnantsOfABadURL()
+                token.type  = TOKEN_TYPE.BAD_URL
+                token.value = stringToken.value
+                return token
+            }
+
+            token.value = stringToken.value
+            this.consumeWhitespace()
+
+            if ( !this.peek() || this.peek() === RIGHT_PARENTHESIS ) {
+                this.next()
+                return token
+            } else {
+                this.consumeRemnantsOfABadURL()
+                token.type = TOKEN_TYPE.BAD_URL
+                return token
+            }
+        }
+
+        while ( ch = this.peek() ) {
+            if ( ch === RIGHT_PARENTHESIS ) {
+                this.next()
+                break
+            }
+
+            if ( isWhitespace( ch ) ) {
+                this.consumeWhitespace()
+
+                if ( !this.peek() || this.peek() === RIGHT_PARENTHESIS ) {
+                    this.next()
+                } else {
+                    this.consumeRemnantsOfABadURL()
+                    token.type = TOKEN_TYPE.BAD_URL
+                }
+
+                break
+            }
+
+            if ( ch === QUOTATION_MARK || ch === APOSTROPHE || ch === LEFT_PARENTHESIS || isNonPrintable( ch ) ) {
+                this.consumeRemnantsOfABadURL()
+                token.type = TOKEN_TYPE.BAD_URL
+                break
+            }
+
+            if ( ch === REVERSE_SOLIDUS ) {
+                if ( this.checkValidEscape() ) {
+                    value += this.consumeEscapedCodePoint()
+                } else {
+                    //parse error
+                    this.consumeRemnantsOfABadURL()
+                    token.type = TOKEN_TYPE.BAD_URL
+                    break
+                }
+            }
+
+            value += this.next()
+        }
+
+        token.value = value
+        token.end   = token.start + value.length
+        return token
+    }
+
+    /**
+     * this method won't return anything
+     */
+    consumeRemnantsOfABadURL() {
+        let ch
+
+        while ( ch = this.peek() ) {
+            if ( ch === RIGHT_PARENTHESIS ) {
+                this.next()
+                return
+            } else if ( this.checkValidEscape() ) {
+                this.consumeEscapedCodePoint()
+            }
+
+            this.next()
+        }
     }
 
     checkValidEscape( a, b ) {
