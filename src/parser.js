@@ -1,6 +1,21 @@
 let TOKEN_TYPE,
     mirrorType
 
+const
+    STYLESHEET     = 'STYLESHEET',
+    QUALIFIED_RULE = 'QUALIFIED_RULE',
+    AT_RULE        = 'AT_RULE',
+    BLOCK          = 'BLOCK',
+    DECLARATION    = 'DECLARATION',
+    FUNCTION       = 'FUNCTION',
+    IMPORTANT      = 'IMPORTANT',
+    SYNTAX_ERROR   = 'SYNTAX_ERROR',
+
+    TYPES          = {
+        STYLESHEET, QUALIFIED_RULE, AT_RULE, BLOCK, DECLARATION, FUNCTION,
+        SYNTAX_ERROR
+    }
+
 class Parser {
     constructor( tokens ) {
         if ( !tokens || !tokens.length ) {
@@ -8,159 +23,276 @@ class Parser {
         }
 
         this.tokens = tokens
+        this.len    = tokens.length
+        this.index  = 0
     }
 
     run( TokenType ) {
         TOKEN_TYPE = TokenType
         mirrorType = {
-            [TOKEN_TYPE.LEFT_SQUARE_BRACKET]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
-            [TOKEN_TYPE.LEFT_PARENTHESIS]:    TOKEN_TYPE.RIGHT_PARENTHESIS,
-            [TOKEN_TYPE.LEFT_BRACE]:          TOKEN_TYPE.RIGHT_BRACE
+            [ TOKEN_TYPE.LEFT_SQUARE_BRACKET ]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
+            [ TOKEN_TYPE.LEFT_PARENTHESIS ]   : TOKEN_TYPE.RIGHT_PARENTHESIS,
+            [ TOKEN_TYPE.LEFT_BRACE ]         : TOKEN_TYPE.RIGHT_BRACE
         }
         return this.parseStyleSheet()
     }
 
+    next() {
+        return this.cur = this.tokens[ this.index++ ]
+    }
+
+    reconsume() {
+        this.index--
+        this.cur = this.tokens[ this.index ]
+    }
+
     //https://drafts.csswg.org/css-syntax-3/#parse-stylesheet
     parseStyleSheet() {
-        let stylesheet = {},
-            rules, firstRule
-
-        rules     = this.parseRules()
-        firstRule = rules[ 0 ]
-
-        if ( isAtRule( firstRule ) &&
-            firstRule.name.toLowerCase() === 'charset' ) {
-            rules.shift()
+        return {
+            type : TYPES.STYLESHEET,
+            value: this.consumeListOfRules( {
+                topLevel: true
+            } )
         }
-
-        return stylesheet
     }
 
-    //https://drafts.csswg.org/css-syntax-3/#parse-list-of-rules
     parseListOfRules() {
-        let tokens = this.tokens,
-            len    = tokens.length,
-            rules  = []
+        return this.consumeListOfRules()
+    }
 
-        for ( let i = 0; i < len; i++ ) {
-            let token = tokens[ i ],
-                type  = token.type
+    parseRule() {
+        let token = this.next(),
+            rule
+
+        if ( token.type === TOKEN_TYPE.WHITESPACE ) {
+            token = this.next()
+        }
+
+        if ( token.type === TOKEN_TYPE.EOF ) {
+            return {
+                type: TYPES.SYNTAX_ERROR
+            }
+        } else if ( token.type === TOKEN_TYPE.AT_RULE ) {
+            return this.consumeAtRule()
+        } else {
+            rule = this.consumeQualifiedRule()
+
+            if ( !rule ) {
+                return {
+                    type: TYPES.SYNTAX_ERROR
+                }
+            }
+        }
+
+        if ( token.type === TOKEN_TYPE.WHITESPACE ) {
+            token = this.next()
+        }
+
+        if ( token.type === TOKEN_TYPE.EOF ) {
+            return rule
+        } else {
+            return {
+                type: TYPES.SYNTAX_ERROR
+            }
+        }
+    }
+
+    //5.4.1
+    consumeListOfRules( opts = {} ) {
+        let rules = [],
+            token
+
+        while ( token = this.next() ) {
+            let type = token.type
 
             switch ( type ) {
-                case TOKEN_TYPE.WHITESPACE:
-                    break
-
-                case TOKEN_TYPE.EOF:
-                    return rules
-
-                case TOKEN_TYPE.CDC:
-                case TOKEN_TYPE.CDO:
-                    //TODO
-                    if ( !this.topLevel ) {
-                        rules.push( this.consumeQualifiedRule() )
-                    }
-                    break
-
-                case TOKEN_TYPE.AT_KEYWORD:
-                    rules.push( this.consumeAtRule() )
-                    break
-
-                default:
-                    this.consumeQualifiedRule()
-            }
-        }
-    }
-
-    //https://drafts.csswg.org/css-syntax-3/#parse-rule
-    parseRule() {
-        let tokens = this.tokens
-
-        while ( 1 ) {
-            if ( tokens[ 0 ].type !== TOKEN_TYPE.WHITESPACE ) {
+            case TOKEN_TYPE.WHITESPACE:
                 break
-            } else {
-                tokens.shift()
+
+            case TOKEN_TYPE.EOF:
+                return rules
+
+            case TOKEN_TYPE.CDC:
+            case TOKEN_TYPE.CDO:
+                if ( !opts.topLevel ) {
+                    this.reconsume()
+                    let qualifiedRule = this.consumeQualifiedRule()
+                    qualifiedRule && rules.push( qualifiedRule )
+                }
+                break
+
+            case TOKEN_TYPE.AT_KEYWORD:
+                this.reconsume()
+
+                let atRule = this.consumeAtRule()
+                atRule && rules.push( atRule )
+                break
+
+            default:
+                this.reconsume()
+                let qualifiedRule = this.consumeQualifiedRule()
+                qualifiedRule && rules.push( qualifiedRule )
             }
         }
 
-        if ( tokens[ 0 ] == TOKEN_TYPE.EOF ) {
-            throw Error( 'syntax error' )
+        return rules
+    }
+
+    //5.4.2
+    consumeAtRule() {
+        let atRule = {
+                type   : TYPES.AT_RULE,
+                name   : this.cur.value,
+                prelude: []
+            },
+            token
+
+        while ( token = this.next() ) {
+            let type = token.type
+
+            if ( type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF ) {
+                break
+            } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
+                atRule.block = this.consumeSimpleBlock()
+                break
+                //TODO: simple block with an associated token of <{-token>
+            } else {
+                this.reconsume()
+                atRule.prelude.push( this.consumeComponent() )
+            }
         }
+
+        return atRule
     }
 
-    //https://drafts.csswg.org/css-syntax-3/#parse-declaration
-    parseDeclaration() {
-
-    }
-
-    //https://drafts.csswg.org/css-syntax-3/#parse-list-of-declarations
-    parseListOfDeclarations() {
-
-    }
-
-    //https://drafts.csswg.org/css-syntax-3/#parse-component-value
-    parseComponentValue() {
-
-    }
-
-    //https://drafts.csswg.org/css-syntax-3/#parse-list-of-component-values
-    parseListOfComponentValues() {
-
-    }
-
-    //https://drafts.csswg.org/css-syntax-3/#parse-comma-separated-list-of-component-values
-    parseCommaSeparatedListOfComponentValues() {
-    }
-
+    //5.4.3
     consumeQualifiedRule() {
-        let tokens = this.tokens,
-            rules  = []
+        let rule = {
+                type   : TYPES.QUALIFIED_RULE,
+                prelude: []
+            },
+            token
 
-        while ( 1 ) {
-            let token = tokens.shift(),
-                type  = token.type
+        while ( token = this.next() ) {
+            let type = token.type
 
             if ( type === TOKEN_TYPE.EOF ) {
                 //parse error
-                return null
+                rule = null
+                break
             } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
-                rules.push( this.consumeSimpleBlock() )
-                return rules
-                //TODO: simple block with an associated token of <{-token>
+                rule.block = this.consumeSimpleBlock()
+                break
             } else {
-                tokens.unshift( token )
-                rules.push( this.consumeComponentValue() )
+                this.reconsume()
+                rule.prelude.push( this.consumeComponent() )
             }
+        }
+
+        return rule
+    }
+
+    //5.4.4
+    consumeListOfDeclarations() {
+
+    }
+
+    //5.4.5
+    consumeDeclaration() {
+        let declaration = {
+                type : TYPES.DECLARATION,
+                value: []
+            },
+            token
+
+        token = this.next()
+
+        if ( token.type === TOKEN_TYPE.WHITESPACE ) {
+            token = this.next()
+        }
+
+        if ( token.type !== TOKEN_TYPE.COLON ) {
+            //parse error
+            return
+        }
+
+        while ( token = this.next() ) {
+            if ( token.type !== TOKEN_TYPE.EOF ) {
+                declaration.value.push( token )
+            }
+        }
+
+        let value      = declaration.value,
+            last       = value[ value.lenght - 1 ],
+            nextToLast = value[ value.length - 2 ]
+
+        //parse !important
+        if ( last && nextToLast &&
+            nextToLast.type === TOKEN_TYPE.DELIM &&
+            nextToLast.value === '!' &&
+            last.type === TOKEN_TYPE.IDENT &&
+            last.value === IMPORTANT
+        ) {
+            declaration.important = true
+        }
+
+        return declaration
+    }
+
+    //5.4.6
+    consumeComponent() {
+        let token = this.next(),
+            type  = token.type
+
+        if ( type === TOKEN_TYPE.LEFT_SQUARE_BRACKET || type === TOKEN_TYPE.LEFT_PARENTHESIS || type === TOKEN_TYPE.LEFT_CURLY_BRACKET ) {
+            return this.consumeSimpleBlock( type )
+        } else if ( type === TOKEN_TYPE.FUNCTION ) {
+            return this.consumeFunction()
+        } else {
+            return token
         }
     }
 
-    consumeAtRule() {
-        let tokens = this.tokens,
-            rules  = []
+    //5.4.7
+    consumeSimpleBlock( ending ) {
+        let endingTokenType = mirrorType[ ending ],
+            block           = {
+                type : TYPES.BLOCK,
+                token: this.cur,
+                value: []
+            },
+            token
 
-        while ( 1 ) {
-            let token = tokens.shift(),
-                type  = token.type
-
-            if ( type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF ) {
-                return rules
-            } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
-                rules.push( this.consumeSimpleBlock() )
-                return rules
-                //TODO: simple block with an associated token of <{-token>
+        while ( token = this.next() ) {
+            if ( token.type === TOKEN_TYPE.EOF || token.type === endingTokenType ) {
+                break
             } else {
-                tokens.unshift( token )
-                rules.push( this.consumeComponentValue() )
+                this.reconsume()
+                block.value.push( this.consumeComponent() )
             }
         }
+
+        return block
     }
 
-    consumeSimpleBlock() {
+    //5.4.8
+    consumeFunction() {
+        let cur  = this.cur,
+            func = {
+                type : TYPES.FUNCTION,
+                name : cur.value,
+                value: []
+            },
+            token
 
-    }
-
-    consumeComponentValue() {
-
+        while ( token = this.next() ) {
+            if ( token.type === TOKEN_TYPE.EOF || token.type === TOKEN_TYPE.RIGHT_PARENTHESIS ) {
+                return func
+            } else {
+                this.reconsume()
+                func.value.push( this.consumeComponent() )
+            }
+        }
     }
 }
 
