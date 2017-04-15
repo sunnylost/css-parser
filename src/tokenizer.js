@@ -34,14 +34,17 @@ let NULL                 = code( 0x0 ),
     VERTICAL_LINE        = code( 0x7c ),//|
     TILDE                = code( 0x7e ),//~
     EXCLAMATION_MARK     = code( 0x21 ),
+    QUESTION_MARK        = code( 0x3f ),
     PERCENTAGE_SIGN      = '%',
     GREATER_THAN_SIGN    = '>',
     NEWLINE              = LF,
 
     CAPITAL_E            = 'E',
+    CAPITAL_F            = 'F',
     CAPITAL_U            = 'U',
     SMALL_E              = 'e',
     SMALL_U              = 'u',
+    ZERO                 = '0',
 
     //https://drafts.csswg.org/css-syntax-3/#input-preprocessing
     preprocessHanlder    = ( src ) => {
@@ -118,7 +121,8 @@ class Tokenizer {
         let ch
 
         if ( ch = this.peek() ) {
-            if ( isNameStart( ch ) ) {
+            //do not consume Unicode Range
+            if ( ch !== CAPITAL_U && ch !== SMALL_U && isNameStart( ch ) ) {
                 return this.consumeIdent()
             }
 
@@ -266,7 +270,10 @@ class Tokenizer {
 
             case CAPITAL_U:
             case SMALL_U:
-                //TODO
+                if ( this.peek() === PLUS_SIGN && ( isHexDigit( this.peek( 2 ) ) || this.peek( 2 ) === QUESTION_MARK ) ) {
+                    this.next()
+                    return this.consumeUnicodeRange()
+                }
 
                 this.reconsume()
                 return this.consumeIdent()
@@ -588,6 +595,69 @@ class Tokenizer {
         }
 
         return REPLACEMENT
+    }
+
+    consumeUnicodeRange() {
+        let ch,
+            count = 0,
+            value = '',
+            token = {
+                type : TOKEN_TYPE.UNICODE_RANGE,
+                start: this.pos
+            },
+            isHexEnough, hasQuestionMark,
+            startRange, endRange
+
+        while ( ( ch = this.next() ) && count <= 6 ) {
+            if ( !isHexEnough && isHexDigit( ch ) ) {
+                value += ch
+                count++
+            } else if ( ch === QUESTION_MARK ) {
+                value += ch
+                count++
+                hasQuestionMark = isHexEnough = true
+            } else {
+                this.reconsume()
+                break
+            }
+        }
+
+        if ( hasQuestionMark ) {
+            startRange = parseInt( value.replace( /\?/g, ZERO ), 16 )
+            endRange   = parseInt( value.replace( /\?/g, CAPITAL_F ), 16 )
+
+            token.startRange = startRange
+            token.endRange   = endRange
+            token.value      = value
+            token.end        = token.start + value.length
+            return token
+        } else {
+            startRange = parseInt( value, 16 )
+        }
+
+        if ( this.peek() === HYPHEN_MINUS && isHexDigit( this.peek( 2 ) ) ) {
+            value += this.next()
+            count = 0
+
+            let tmpVal = ''
+
+            while ( ( ch = this.next() ) && isHexDigit( ch ) && count <= 6 ) {
+                tmpVal += ch
+                value += ch
+                count++
+            }
+
+            this.reconsume()
+            endRange = parseInt( tmpVal, 16 )
+        } else {
+            endRange = startRange
+        }
+
+        token.startRange = startRange
+        token.endRange   = endRange
+        token.value      = value
+        token.end        = token.start + value.length
+        return token
     }
 
     checkValidEscape( a, b ) {
