@@ -2,7 +2,7 @@
   "name": "css-parser",
   "version": "1.0.0",
   "description": "parse css",
-  "main": "index.js",
+  "main": "build/index.js",
   "scripts": {
     "dev": "babel src/ -w -d build/"
   },

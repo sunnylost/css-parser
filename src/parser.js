@@ -32,7 +32,7 @@ class Parser {
         mirrorType = {
             [ TOKEN_TYPE.LEFT_SQUARE_BRACKET ]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
             [ TOKEN_TYPE.LEFT_PARENTHESIS ]   : TOKEN_TYPE.RIGHT_PARENTHESIS,
-            [ TOKEN_TYPE.LEFT_BRACE ]         : TOKEN_TYPE.RIGHT_BRACE
+            [ TOKEN_TYPE.LEFT_CURLY_BRACKET ] : TOKEN_TYPE.RIGHT_CURLY_BRACKET
         }
         return this.parseStyleSheet()
     }
@@ -217,8 +217,8 @@ class Parser {
 
             if ( type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF ) {
                 break
-            } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
-                atRule.block = this.consumeSimpleBlock()
+            } else if ( type === TOKEN_TYPE.LEFT_CURLY_BRACKET ) {
+                atRule.block = this.consumeSimpleBlock( type )
                 break
                 //TODO: simple block with an associated token of <{-token>
             } else {
@@ -245,8 +245,8 @@ class Parser {
                 //parse error
                 rule = null
                 break
-            } else if ( type === TOKEN_TYPE.LEFT_BRACE ) {
-                rule.block = this.consumeSimpleBlock()
+            } else if ( type === TOKEN_TYPE.LEFT_CURLY_BRACKET ) {
+                rule.block = this.consumeSimpleBlock( type )
                 break
                 //TODO: consume simple block
             } else {
@@ -261,7 +261,7 @@ class Parser {
     //5.4.4
     consumeListOfDeclarations() {
         let list = [],
-            token
+            token, _token
 
         while ( token = this.next() ) {
             switch ( token.type ) {
@@ -277,8 +277,7 @@ class Parser {
                 break
 
             case TOKEN_TYPE.IDENT:
-                let _list = [ this.cur ],
-                    _token
+                let _list = [ this.cur ]
 
                 while (
                 ( _token = this.next() ) &&
@@ -296,8 +295,6 @@ class Parser {
 
             default:
                 //parse error
-                let _token
-
                 while (
                 ( _token = this.next() ) &&
                 _token.type !== TOKEN_TYPE.EOF &&
