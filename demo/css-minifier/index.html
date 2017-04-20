@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="../../dist/index.js"></script>
+    <script src="./minifier.js"></script>
+    <style>
+        textarea {
+            display  : block;
+            width    : 50%;
+            height   : 200px;
+            overflow : scroll;
+        }
+
+        button {
+            width  : 40px;
+            height : 25px;
+        }
+    </style>
+</head>
+<body>
+<label for="source">Source</label>
+<textarea id="source" cols="30" rows="10">
+    div > a:first-child, span {
+       color: #ffffff;
+       font-size: 12px;
+       background-color: #aaa;
+       color: #bbb;
+    }
+</textarea>
+<label for="dest">Dest</label>
+<button id="run">Run</button>
+<textarea id="dest" cols="30" rows="10"></textarea>
+<script>
+    document.getElementById( 'run' ).addEventListener( 'click', function() {
+        var source = document.getElementById( 'source' ).value
+
+        document.getElementById( 'dest' ).value = minifier( source )
+    } )
+</script>
+</body>
+</html>
