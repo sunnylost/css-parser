@@ -1,5 +1,5 @@
 //https://drafts.csswg.org/css-syntax-3/#tokenization
-let types     = Object.create( null ),
+let types = Object.create(null),
     typeNames = [
         'EOF',
         'COMMENT',
@@ -32,12 +32,12 @@ let types     = Object.create( null ),
         'LEFT_PARENTHESIS', //(
         'RIGHT_PARENTHESIS', //)
         'LEFT_CURLY_BRACKET', //{
-        'RIGHT_CURLY_BRACKET',  //}
-        'UNICODE_RANGE'
+        'RIGHT_CURLY_BRACKET', //}
+        'UNICODE_RANGE',
     ]
 
-typeNames.forEach( ( type ) => {
-    types[ type ] = type
-} )
+typeNames.forEach(type => {
+    types[type] = type
+})
 
 export default types

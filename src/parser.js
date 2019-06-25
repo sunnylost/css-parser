@@ -1,58 +1,60 @@
-let TOKEN_TYPE,
-    mirrorType
+let TOKEN_TYPE, mirrorType
 
-const
-    STYLESHEET     = 'STYLESHEET',
+const STYLESHEET = 'STYLESHEET',
     QUALIFIED_RULE = 'QUALIFIED_RULE',
-    AT_RULE        = 'AT_RULE',
-    BLOCK          = 'BLOCK',
-    DECLARATION    = 'DECLARATION',
-    FUNCTION       = 'FUNCTION',
-    IMPORTANT      = 'IMPORTANT',
-    SYNTAX_ERROR   = 'SYNTAX_ERROR',
-
-    TYPES          = {
-        STYLESHEET, QUALIFIED_RULE, AT_RULE, BLOCK, DECLARATION, FUNCTION,
-        SYNTAX_ERROR
+    AT_RULE = 'AT_RULE',
+    BLOCK = 'BLOCK',
+    DECLARATION = 'DECLARATION',
+    FUNCTION = 'FUNCTION',
+    IMPORTANT = 'IMPORTANT',
+    SYNTAX_ERROR = 'SYNTAX_ERROR',
+    TYPES = {
+        STYLESHEET,
+        QUALIFIED_RULE,
+        AT_RULE,
+        BLOCK,
+        DECLARATION,
+        FUNCTION,
+        SYNTAX_ERROR,
     }
 
 class Parser {
-    constructor( tokens ) {
-        if ( !tokens || !tokens.length ) {
+    constructor(tokens) {
+        if (!tokens || !tokens.length) {
             return []
         }
 
         this.tokens = tokens
-        this.len    = tokens.length
-        this.index  = 0
+        this.len = tokens.length
+        this.index = 0
     }
 
-    run( TokenType ) {
+    run(TokenType) {
         TOKEN_TYPE = TokenType
         mirrorType = {
-            [ TOKEN_TYPE.LEFT_SQUARE_BRACKET ]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
-            [ TOKEN_TYPE.LEFT_PARENTHESIS ]   : TOKEN_TYPE.RIGHT_PARENTHESIS,
-            [ TOKEN_TYPE.LEFT_CURLY_BRACKET ] : TOKEN_TYPE.RIGHT_CURLY_BRACKET
+            [TOKEN_TYPE.LEFT_SQUARE_BRACKET]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
+            [TOKEN_TYPE.LEFT_PARENTHESIS]: TOKEN_TYPE.RIGHT_PARENTHESIS,
+            [TOKEN_TYPE.LEFT_CURLY_BRACKET]: TOKEN_TYPE.RIGHT_CURLY_BRACKET,
         }
         return this.parseStyleSheet()
     }
 
     next() {
-        return this.cur = this.tokens[ this.index++ ]
+        return (this.cur = this.tokens[this.index++])
     }
 
     reconsume() {
         this.index--
-        this.cur = this.tokens[ this.index ]
+        this.cur = this.tokens[this.index]
     }
 
     //https://drafts.csswg.org/css-syntax-3/#parse-stylesheet
     parseStyleSheet() {
         return {
-            type : TYPES.STYLESHEET,
-            value: this.consumeListOfRules( {
-                topLevel: true
-            } )
+            type: TYPES.STYLESHEET,
+            value: this.consumeListOfRules({
+                topLevel: true,
+            }),
         }
     }
 
@@ -64,35 +66,35 @@ class Parser {
         let token = this.next(),
             rule
 
-        if ( token.type === TOKEN_TYPE.WHITESPACE ) {
+        if (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
-        if ( token.type === TOKEN_TYPE.EOF ) {
+        if (token.type === TOKEN_TYPE.EOF) {
             return {
-                type: TYPES.SYNTAX_ERROR
+                type: TYPES.SYNTAX_ERROR,
             }
-        } else if ( token.type === TOKEN_TYPE.AT_RULE ) {
+        } else if (token.type === TOKEN_TYPE.AT_RULE) {
             return this.consumeAtRule()
         } else {
             rule = this.consumeQualifiedRule()
 
-            if ( !rule ) {
+            if (!rule) {
                 return {
-                    type: TYPES.SYNTAX_ERROR
+                    type: TYPES.SYNTAX_ERROR,
                 }
             }
         }
 
-        while ( token.type === TOKEN_TYPE.WHITESPACE ) {
+        while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
-        if ( token.type === TOKEN_TYPE.EOF ) {
+        if (token.type === TOKEN_TYPE.EOF) {
             return rule
         } else {
             return {
-                type: TYPES.SYNTAX_ERROR
+                type: TYPES.SYNTAX_ERROR,
             }
         }
     }
@@ -100,19 +102,21 @@ class Parser {
     parseDeclaration() {
         let token = this.next()
 
-        while ( token.type === TOKEN_TYPE.WHITESPACE ) {
+        while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
-        if ( token.type !== TOKEN_TYPE.IDENT ) {
+        if (token.type !== TOKEN_TYPE.IDENT) {
             return {
-                type: TYPES.SYNTAX_ERROR
+                type: TYPES.SYNTAX_ERROR,
             }
         }
 
-        return this.consumeDeclaration() || {
-                type: TYPES.SYNTAX_ERROR
+        return (
+            this.consumeDeclaration() || {
+                type: TYPES.SYNTAX_ERROR,
             }
+        )
     }
 
     parseListOfDeclaration() {
@@ -122,31 +126,31 @@ class Parser {
     parseComponent() {
         let token = this.next()
 
-        while ( token.type === TOKEN_TYPE.WHITESPACE ) {
+        while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
-        if ( token.type === TOKEN_TYPE.EOF ) {
+        if (token.type === TOKEN_TYPE.EOF) {
             return {
-                type: TYPES.SYNTAX_ERROR
+                type: TYPES.SYNTAX_ERROR,
             }
         }
 
         this.reconsume()
 
         let value = this.consumeComponent() || {
-                type: TYPES.SYNTAX_ERROR
-            }
+            type: TYPES.SYNTAX_ERROR,
+        }
 
-        while ( token.type === TOKEN_TYPE.WHITESPACE ) {
+        while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
-        if ( token.type === TOKEN_TYPE.EOF ) {
+        if (token.type === TOKEN_TYPE.EOF) {
             return value
         } else {
             return {
-                type: TYPES.SYNTAX_ERROR
+                type: TYPES.SYNTAX_ERROR,
             }
         }
     }
@@ -155,48 +159,48 @@ class Parser {
         let list = [],
             token
 
-        while ( ( token = this.next() ) && token.type !== TOKEN_TYPE.EOF ) {
-            list.push( this.consumeComponent() )
+        while ((token = this.next()) && token.type !== TOKEN_TYPE.EOF) {
+            list.push(this.consumeComponent())
         }
 
         return list
     }
 
     //5.4.1
-    consumeListOfRules( opts = {} ) {
+    consumeListOfRules(opts = {}) {
         let rules = [],
             token
 
-        while ( token = this.next() ) {
+        while ((token = this.next())) {
             let type = token.type
 
-            switch ( type ) {
-            case TOKEN_TYPE.WHITESPACE:
-                break
+            switch (type) {
+                case TOKEN_TYPE.WHITESPACE:
+                    break
 
-            case TOKEN_TYPE.EOF:
-                return rules
+                case TOKEN_TYPE.EOF:
+                    return rules
 
-            case TOKEN_TYPE.CDC:
-            case TOKEN_TYPE.CDO:
-                if ( !opts.topLevel ) {
+                case TOKEN_TYPE.CDC:
+                case TOKEN_TYPE.CDO:
+                    if (!opts.topLevel) {
+                        this.reconsume()
+                        let qualifiedRule = this.consumeQualifiedRule()
+                        qualifiedRule && rules.push(qualifiedRule)
+                    }
+                    break
+
+                case TOKEN_TYPE.AT_KEYWORD:
+                    this.reconsume()
+
+                    let atRule = this.consumeAtRule()
+                    atRule && rules.push(atRule)
+                    break
+
+                default:
                     this.reconsume()
                     let qualifiedRule = this.consumeQualifiedRule()
-                    qualifiedRule && rules.push( qualifiedRule )
-                }
-                break
-
-            case TOKEN_TYPE.AT_KEYWORD:
-                this.reconsume()
-
-                let atRule = this.consumeAtRule()
-                atRule && rules.push( atRule )
-                break
-
-            default:
-                this.reconsume()
-                let qualifiedRule = this.consumeQualifiedRule()
-                qualifiedRule && rules.push( qualifiedRule )
+                    qualifiedRule && rules.push(qualifiedRule)
             }
         }
 
@@ -206,24 +210,24 @@ class Parser {
     //5.4.2
     consumeAtRule() {
         let atRule = {
-                type   : TYPES.AT_RULE,
-                name   : this.cur.value,
-                prelude: []
+                type: TYPES.AT_RULE,
+                name: this.cur.value,
+                prelude: [],
             },
             token
 
-        while ( token = this.next() ) {
+        while ((token = this.next())) {
             let type = token.type
 
-            if ( type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF ) {
+            if (type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF) {
                 break
-            } else if ( type === TOKEN_TYPE.LEFT_CURLY_BRACKET ) {
-                atRule.block = this.consumeSimpleBlock( type )
+            } else if (type === TOKEN_TYPE.LEFT_CURLY_BRACKET) {
+                atRule.block = this.consumeSimpleBlock(type)
                 break
                 //TODO: simple block with an associated token of <{-token>
             } else {
                 this.reconsume()
-                atRule.prelude.push( this.consumeComponent() )
+                atRule.prelude.push(this.consumeComponent())
             }
         }
 
@@ -233,25 +237,25 @@ class Parser {
     //5.4.3
     consumeQualifiedRule() {
         let rule = {
-                type   : TYPES.QUALIFIED_RULE,
-                prelude: []
+                type: TYPES.QUALIFIED_RULE,
+                prelude: [],
             },
             token
 
-        while ( token = this.next() ) {
+        while ((token = this.next())) {
             let type = token.type
 
-            if ( type === TOKEN_TYPE.EOF ) {
+            if (type === TOKEN_TYPE.EOF) {
                 //parse error
                 rule = null
                 break
-            } else if ( type === TOKEN_TYPE.LEFT_CURLY_BRACKET ) {
-                rule.block = this.consumeSimpleBlock( type )
+            } else if (type === TOKEN_TYPE.LEFT_CURLY_BRACKET) {
+                rule.block = this.consumeSimpleBlock(type)
                 break
                 //TODO: consume simple block
             } else {
                 this.reconsume()
-                rule.prelude.push( this.consumeComponent() )
+                rule.prelude.push(this.consumeComponent())
             }
         }
 
@@ -261,47 +265,48 @@ class Parser {
     //5.4.4
     consumeListOfDeclarations() {
         let list = [],
-            token, _token
+            token,
+            _token
 
-        while ( token = this.next() ) {
-            switch ( token.type ) {
-            case TOKEN_TYPE.WHITESPACE:
-            case TOKEN_TYPE.SEMICOLON:
-                continue
+        while ((token = this.next())) {
+            switch (token.type) {
+                case TOKEN_TYPE.WHITESPACE:
+                case TOKEN_TYPE.SEMICOLON:
+                    continue
 
-            case TOKEN_TYPE.EOF:
-                break
+                case TOKEN_TYPE.EOF:
+                    break
 
-            case TOKEN_TYPE.AT_KEYWORD:
-                list.push( this.consumeAtRule() )
-                break
+                case TOKEN_TYPE.AT_KEYWORD:
+                    list.push(this.consumeAtRule())
+                    break
 
-            case TOKEN_TYPE.IDENT:
-                let _list = [ this.cur ]
+                case TOKEN_TYPE.IDENT:
+                    let _list = [this.cur]
 
-                while (
-                ( _token = this.next() ) &&
-                _token.type !== TOKEN_TYPE.EOF &&
-                _token.type !== TOKEN_TYPE.SEMICOLON
+                    while (
+                        (_token = this.next()) &&
+                        _token.type !== TOKEN_TYPE.EOF &&
+                        _token.type !== TOKEN_TYPE.SEMICOLON
                     ) {
-                    _list.push( _token )
-                }
+                        _list.push(_token)
+                    }
 
-                let result = this.consumeDeclaration( _list ) //TODO: from _list
+                    let result = this.consumeDeclaration(_list) //TODO: from _list
 
-                result && list.push( result )
+                    result && list.push(result)
 
-                break
+                    break
 
-            default:
-                //parse error
-                while (
-                ( _token = this.next() ) &&
-                _token.type !== TOKEN_TYPE.EOF &&
-                _token.type !== TOKEN_TYPE.SEMICOLON
+                default:
+                    //parse error
+                    while (
+                        (_token = this.next()) &&
+                        _token.type !== TOKEN_TYPE.EOF &&
+                        _token.type !== TOKEN_TYPE.SEMICOLON
                     ) {
-                    //do nothing
-                }
+                        //do nothing
+                    }
             }
         }
 
@@ -311,34 +316,36 @@ class Parser {
     //5.4.5
     consumeDeclaration() {
         let declaration = {
-                type : TYPES.DECLARATION,
-                value: []
+                type: TYPES.DECLARATION,
+                value: [],
             },
             token
 
         token = this.next()
 
-        if ( token.type === TOKEN_TYPE.WHITESPACE ) {
+        if (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
-        if ( token.type !== TOKEN_TYPE.COLON ) {
+        if (token.type !== TOKEN_TYPE.COLON) {
             //parse error
             return
         }
 
-        while ( token = this.next() ) {
-            if ( token.type !== TOKEN_TYPE.EOF ) {
-                declaration.value.push( token )
+        while ((token = this.next())) {
+            if (token.type !== TOKEN_TYPE.EOF) {
+                declaration.value.push(token)
             }
         }
 
-        let value      = declaration.value,
-            last       = value[ value.lenght - 1 ],
-            nextToLast = value[ value.length - 2 ]
+        let value = declaration.value,
+            last = value[value.lenght - 1],
+            nextToLast = value[value.length - 2]
 
         //parse !important
-        if ( last && nextToLast &&
+        if (
+            last &&
+            nextToLast &&
             nextToLast.type === TOKEN_TYPE.DELIM &&
             nextToLast.value === '!' &&
             last.type === TOKEN_TYPE.IDENT &&
@@ -353,11 +360,15 @@ class Parser {
     //5.4.6
     consumeComponent() {
         let token = this.next(),
-            type  = token.type
+            type = token.type
 
-        if ( type === TOKEN_TYPE.LEFT_SQUARE_BRACKET || type === TOKEN_TYPE.LEFT_PARENTHESIS || type === TOKEN_TYPE.LEFT_CURLY_BRACKET ) {
-            return this.consumeSimpleBlock( type )
-        } else if ( type === TOKEN_TYPE.FUNCTION ) {
+        if (
+            type === TOKEN_TYPE.LEFT_SQUARE_BRACKET ||
+            type === TOKEN_TYPE.LEFT_PARENTHESIS ||
+            type === TOKEN_TYPE.LEFT_CURLY_BRACKET
+        ) {
+            return this.consumeSimpleBlock(type)
+        } else if (type === TOKEN_TYPE.FUNCTION) {
             return this.consumeFunction()
         } else {
             return token
@@ -365,21 +376,21 @@ class Parser {
     }
 
     //5.4.7
-    consumeSimpleBlock( ending ) {
-        let endingTokenType = mirrorType[ ending ],
-            block           = {
-                type : TYPES.BLOCK,
+    consumeSimpleBlock(ending) {
+        let endingTokenType = mirrorType[ending],
+            block = {
+                type: TYPES.BLOCK,
                 token: this.cur,
-                value: []
+                value: [],
             },
             token
 
-        while ( token = this.next() ) {
-            if ( token.type === TOKEN_TYPE.EOF || token.type === endingTokenType ) {
+        while ((token = this.next())) {
+            if (token.type === TOKEN_TYPE.EOF || token.type === endingTokenType) {
                 break
             } else {
                 this.reconsume()
-                block.value.push( this.consumeComponent() )
+                block.value.push(this.consumeComponent())
             }
         }
 
@@ -388,20 +399,20 @@ class Parser {
 
     //5.4.8
     consumeFunction() {
-        let cur  = this.cur,
+        let cur = this.cur,
             func = {
-                type : TYPES.FUNCTION,
-                name : cur.value,
-                value: []
+                type: TYPES.FUNCTION,
+                name: cur.value,
+                value: [],
             },
             token
 
-        while ( token = this.next() ) {
-            if ( token.type === TOKEN_TYPE.EOF || token.type === TOKEN_TYPE.RIGHT_PARENTHESIS ) {
+        while ((token = this.next())) {
+            if (token.type === TOKEN_TYPE.EOF || token.type === TOKEN_TYPE.RIGHT_PARENTHESIS) {
                 return func
             } else {
                 this.reconsume()
-                func.value.push( this.consumeComponent() )
+                func.value.push(this.consumeComponent())
             }
         }
     }
