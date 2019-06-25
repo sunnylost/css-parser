@@ -1,4 +1,6 @@
-let TOKEN_TYPE, mirrorType
+import TOKEN_TYPE from './tokenType'
+
+let mirrorType
 
 const STYLESHEET = 'STYLESHEET',
     QUALIFIED_RULE = 'QUALIFIED_RULE',
@@ -29,8 +31,7 @@ class Parser {
         this.index = 0
     }
 
-    run(TokenType) {
-        TOKEN_TYPE = TokenType
+    run() {
         mirrorType = {
             [TOKEN_TYPE.LEFT_SQUARE_BRACKET]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
             [TOKEN_TYPE.LEFT_PARENTHESIS]: TOKEN_TYPE.RIGHT_PARENTHESIS,

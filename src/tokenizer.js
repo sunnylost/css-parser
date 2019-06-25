@@ -1,3 +1,5 @@
+import TOKEN_TYPE from './tokenType'
+
 let code = cp => String.fromCharCode(cp)
 
 let NULL = code(0x0),
@@ -79,8 +81,7 @@ let NULL = code(0x0),
             ch === DELETE ||
             (cp >= 0xe && cp <= 0x1f)
         )
-    },
-    TOKEN_TYPE
+    }
 
 const MAX_ALLOWED_CODE_POINT = 0x10ffff
 
@@ -93,6 +94,7 @@ function simpleTokenWrapper(type, value) {
         type,
         start: this.pos,
         end: this.pos + 1,
+        lineNo: this.lineNo,
         value: value || this.cur,
     }
 }
@@ -109,10 +111,8 @@ class Tokenizer {
         this.lineNo = 1
     }
 
-    run(TokenType) {
+    run() {
         let token
-
-        TOKEN_TYPE = TokenType
 
         while ((token = this.advance())) {
             this.tokens.push(token)
@@ -126,6 +126,8 @@ class Tokenizer {
     }
 
     advance() {
+        this.consumeComment()
+
         let ch
 
         if ((ch = this.peek())) {
@@ -377,46 +379,33 @@ class Tokenizer {
     }
 
     consumeComment() {
-        let comment = [],
-            p1,
-            p2,
-            value,
-            start,
-            end
+        this.consumeWhitespace()
+
+        let p1, p2
 
         p1 = this.peek(1)
         p2 = this.peek(2)
 
-        if (p1 && p2 && p1 === SOLIDUS && p2 === ASTERISK) {
-            start = this.pos
-            comment.push(p1, p2)
+        if (p1 === SOLIDUS && p2 === ASTERISK) {
             this.pos += 2
 
             while (1) {
-                p1 = this.peek()
+                p1 = this.peek(1)
                 p2 = this.peek(2)
 
-                if (!p1 || (p1 === ASTERISK && p2 === SOLIDUS)) {
-                    break
+                if (!p1) {
+                    throw Error(`comment not closed at line: ${this.lineNo}, position: ${this.pos}`)
+                } else if (p1 === ASTERISK && p2 === SOLIDUS) {
+                    this.pos += 2
+                    return this.consumeComment()
                 } else {
-                    comment.push(this.next())
+                    if (p1 === NEWLINE) {
+                        this.lineNo++
+                    }
+                    this.pos++
                 }
             }
-
-            comment.push(p1, p2)
-            this.next(2)
-            end = this.pos
-            value = comment.join('')
-
-            return {
-                start,
-                end,
-                value,
-                type: TOKEN_TYPE.COMMENT,
-            }
         }
-
-        return null
     }
 
     consumeWhitespace() {
@@ -426,6 +415,9 @@ class Tokenizer {
             end
 
         while ((ch = this.peek()) && isWhitespace(ch)) {
+            if (ch === NEWLINE) {
+                this.lineNo++
+            }
             whitespace.push(this.next())
         }
 
@@ -434,6 +426,7 @@ class Tokenizer {
         return {
             start,
             end,
+            lineNo: this.lineNo,
             type: TOKEN_TYPE.WHITESPACE,
             value: whitespace.join(''),
         }
