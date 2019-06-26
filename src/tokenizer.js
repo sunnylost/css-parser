@@ -1,5 +1,6 @@
 import TOKEN_TYPE from './tokenType'
 
+const UNRESTRICTED = 'unrestricted'
 let code = cp => String.fromCharCode(cp)
 
 let NULL = code(0x0),
@@ -13,7 +14,6 @@ let NULL = code(0x0),
     SPACE = code(0x20),
     QUOTATION_MARK = code(0x22), //"
     NUMBER_SIGN = code(0x23), //#
-    DOLLAR_SIGN = code(0x24), //$
     APOSTROPHE = code(0x27), //'
     LEFT_PARENTHESIS = code(0x28), //(
     RIGHT_PARENTHESIS = code(0x29), //)
@@ -89,16 +89,6 @@ const MAX_ALLOWED_CODE_POINT = 0x10ffff
  * TODO: fix token position
  */
 
-function simpleTokenWrapper(type, value) {
-    return {
-        type,
-        start: this.pos,
-        end: this.pos + 1,
-        lineNo: this.lineNo,
-        value: value || this.cur,
-    }
-}
-
 class Tokenizer {
     constructor(src) {
         src = preprocessHandler(src)
@@ -128,223 +118,151 @@ class Tokenizer {
     advance() {
         this.consumeComment()
 
-        let ch
+        let start = this.pos
+        let ch = (this.cur = this.next())
 
-        if ((ch = this.peek())) {
-            //do not consume Unicode Range
-            if (ch !== CAPITAL_U && ch !== SMALL_U && isNameStart(ch)) {
-                return this.consumeIdent()
-            }
-
-            if (isWhitespace(ch)) {
-                return this.consumeWhitespace()
-            }
-
-            if (isDigit(ch)) {
-                return this.consumeNumber()
-            }
-
-            this.cur = this.next()
-
-            switch (ch) {
-                case QUOTATION_MARK:
-                    return this.consumeString(QUOTATION_MARK)
-
-                case NUMBER_SIGN:
-                    if (isName(this.peek()) || this.checkValidEscape()) {
-                        let token = {
-                            start: this.pos,
-                            type: TOKEN_TYPE.HASH,
-                            _type: 'unrestricted', //type flag
-                        }
-
-                        if (this.checkIdentifier()) {
-                            token._type = 'id'
-                        }
-
-                        token.value = this.consumeName()
-                        return token
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case DOLLAR_SIGN:
-                    if ((ch = this.peek()) && ch == EQUALS_SIGN) {
-                        return simpleTokenWrapper.call(this, TOKEN_TYPE.SUFFIX_MATCH)
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case APOSTROPHE:
-                    return this.consumeString(APOSTROPHE)
-
-                case LEFT_PARENTHESIS:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.LEFT_PARENTHESIS)
-
-                case RIGHT_PARENTHESIS:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.RIGHT_PARENTHESIS)
-
-                case ASTERISK:
-                    if (this.peek() === EQUALS_SIGN) {
-                        return simpleTokenWrapper.call(
-                            this,
-                            TOKEN_TYPE.SUBSTRING_MATCH,
-                            this.next()
-                        )
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case PLUS_SIGN:
-                    if (this.checkStarWithNumber(ch, this.peek(), this.peek(2))) {
-                        this.reconsume()
-                        return this.consumeNumber()
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case COMMA:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.COMMA)
-
-                case HYPHEN_MINUS:
-                    if (this.checkStarWithNumber(ch, this.peek(), this.peek(2))) {
-                        this.reconsume()
-                        return this.consumeNumber()
-                    } else if (this.checkIdentifier()) {
-                        this.reconsume()
-                        return this.consumeIdent()
-                    } else if (this.peek() === HYPHEN_MINUS && this.peek(2) === GREATER_THAN_SIGN) {
-                        return simpleTokenWrapper.call(this, TOKEN_TYPE.CDC, ch + this.next(2))
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case FULL_STOP:
-                    if (this.checkStarWithNumber(ch, this.peek(), this.peek(2))) {
-                        this.reconsume()
-                        return this.consumeNumber()
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case SOLIDUS:
-                    if (this.peek() === ASTERISK) {
-                        this.reconsume()
-                        return this.consumeComment()
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case COLON:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.COLON)
-
-                case SEMICOLON:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.SEMICOLON)
-
-                case LESS_THAN_SIGN:
-                    if (
-                        this.peek() === EXCLAMATION_MARK &&
-                        this.peek(2) === HYPHEN_MINUS &&
-                        this.peek(3) === HYPHEN_MINUS
-                    ) {
-                        return simpleTokenWrapper.call(this, TOKEN_TYPE.CDO, ch + this.next(3))
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case COMMERCIAL_AT:
-                    if (this.checkIdentifier()) {
-                        return simpleTokenWrapper.call(
-                            this,
-                            TOKEN_TYPE.AT_KEYWORD,
-                            this.consumeName()
-                        )
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case LEFT_SQUARE_BRACKET:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.LEFT_SQUARE_BRACKET)
-
-                case REVERSE_SOLIDUS:
-                    if (this.checkValidEscape()) {
-                        this.reconsume()
-                        return simpleTokenWrapper.call(this, TOKEN_TYPE.IDENT, this.consumeIdent())
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case RIGHT_SQUARE_BRACKET:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.RIGHT_SQUARE_BRACKET)
-
-                case CIRCUMFLEX_ACCENT:
-                    if (this.peek() === EQUALS_SIGN) {
-                        return simpleTokenWrapper.call(
-                            this,
-                            TOKEN_TYPE.PREFIX_MATCH,
-                            ch + this.next()
-                        )
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case LEFT_CURLY_BRACKET:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.LEFT_CURLY_BRACKET)
-
-                case RIGHT_CURLY_BRACKET:
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.RIGHT_CURLY_BRACKET)
-
-                case CAPITAL_U:
-                case SMALL_U:
-                    if (
-                        this.peek() === PLUS_SIGN &&
-                        (isHexDigit(this.peek(2)) || this.peek(2) === QUESTION_MARK)
-                    ) {
-                        this.next()
-                        return this.consumeUnicodeRange()
-                    }
-
-                    this.reconsume()
-                    return this.consumeIdent()
-
-                case VERTICAL_LINE:
-                    if (this.peek() === EQUALS_SIGN) {
-                        return simpleTokenWrapper.call(
-                            this,
-                            TOKEN_TYPE.DASH_MATCH,
-                            ch + this.next()
-                        )
-                    } else if (this.peek() === VERTICAL_LINE) {
-                        return simpleTokenWrapper.call(this, TOKEN_TYPE.COLUMN, ch + this.next())
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                case TILDE:
-                    if (this.peek() === EQUALS_SIGN) {
-                        return simpleTokenWrapper.call(
-                            this,
-                            TOKEN_TYPE.INCLUDE_MATCH,
-                            ch + this.next()
-                        )
-                    }
-
-                    return simpleTokenWrapper.call(this, TOKEN_TYPE.DELIM)
-
-                default:
-                    return {
-                        start: this.pos,
-                        end: this.pos + 1,
-                        type: TOKEN_TYPE.DELIM,
-                        value: ch,
-                    }
+        if (!ch) {
+            return {
+                type: TOKEN_TYPE.EOF,
+                start: this.pos,
+                end: this.pos
             }
         }
 
+        if (isWhitespace(ch)) {
+            return this.consumeWhitespace()
+        }
+
+        switch (ch) {
+            case QUOTATION_MARK:
+                return this.consumeString(QUOTATION_MARK)
+
+            case NUMBER_SIGN:
+                if (isName(this.peek()) || this.checkValidEscape()) {
+                    let token = {
+                        start: this.pos,
+                        type: TOKEN_TYPE.HASH,
+                        typeFlag: UNRESTRICTED
+                    }
+
+                    if (this.checkIdentifier()) {
+                        token.typeFlag = 'id'
+                    }
+
+                    token.value = this.consumeName()
+                    return token
+                } else {
+                    return this.wrap(TOKEN_TYPE.DELIM)
+                }
+
+            case APOSTROPHE:
+                return this.consumeString(APOSTROPHE)
+
+            case LEFT_PARENTHESIS:
+                return this.wrap(TOKEN_TYPE.LEFT_PARENTHESIS)
+
+            case RIGHT_PARENTHESIS:
+                return this.wrap(TOKEN_TYPE.RIGHT_PARENTHESIS)
+
+            case PLUS_SIGN:
+                if (this.checkStarWithNumber(ch, this.peek(), this.peek(2))) {
+                    this.reconsume()
+                    return this.consumeNumber()
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case COMMA:
+                return this.wrap(TOKEN_TYPE.COMMA)
+
+            case HYPHEN_MINUS:
+                if (this.checkStarWithNumber(ch, this.peek(), this.peek(2))) {
+                    this.reconsume()
+                    return this.consumeNumber()
+                } else if (this.peek() === HYPHEN_MINUS && this.peek(2) === GREATER_THAN_SIGN) {
+                    return this.wrap(TOKEN_TYPE.CDC, ch + this.next(2))
+                } else if (this.checkIdentifier()) {
+                    this.reconsume()
+                    return this.consumeIdent()
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case FULL_STOP:
+                if (this.checkStarWithNumber(ch, this.peek(), this.peek(2))) {
+                    this.reconsume()
+                    return this.consumeNumber()
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case COLON:
+                return this.wrap(TOKEN_TYPE.COLON)
+
+            case SEMICOLON:
+                return this.wrap(TOKEN_TYPE.SEMICOLON)
+
+            case LESS_THAN_SIGN:
+                if (
+                    this.peek() === EXCLAMATION_MARK &&
+                    this.peek(2) === HYPHEN_MINUS &&
+                    this.peek(3) === HYPHEN_MINUS
+                ) {
+                    return this.wrap(TOKEN_TYPE.CDO, ch + this.next(3))
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case COMMERCIAL_AT:
+                if (this.checkIdentifier()) {
+                    return this.wrap(TOKEN_TYPE.AT_KEYWORD, this.consumeName())
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case LEFT_SQUARE_BRACKET:
+                return this.wrap(TOKEN_TYPE.LEFT_SQUARE_BRACKET)
+
+            case REVERSE_SOLIDUS:
+                if (this.checkValidEscape()) {
+                    this.reconsume()
+                    return this.wrap(TOKEN_TYPE.IDENT, this.consumeIdent())
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case RIGHT_SQUARE_BRACKET:
+                return this.wrap(TOKEN_TYPE.RIGHT_SQUARE_BRACKET)
+
+            case CIRCUMFLEX_ACCENT:
+                if (this.peek() === EQUALS_SIGN) {
+                    return this.wrap(TOKEN_TYPE.PREFIX_MATCH, ch + this.next())
+                }
+
+                return this.wrap(TOKEN_TYPE.DELIM)
+
+            case LEFT_CURLY_BRACKET:
+                return this.wrap(TOKEN_TYPE.LEFT_CURLY_BRACKET)
+
+            case RIGHT_CURLY_BRACKET:
+                return this.wrap(TOKEN_TYPE.RIGHT_CURLY_BRACKET)
+        }
+
+        if (isDigit(ch)) {
+            this.reconsume()
+            return this.consumeNumber()
+        }
+
+        if (isNameStart(ch)) {
+            this.reconsume()
+            return this.consumeIdent()
+        }
+
         return {
-            start: this.pos,
-            end: this.srcLen - 1,
-            type: TOKEN_TYPE.EOF,
+            start,
+            end: this.pos,
+            type: TOKEN_TYPE.DELIM,
+            value: ch
         }
     }
 
@@ -410,7 +328,7 @@ class Tokenizer {
 
     consumeWhitespace() {
         let start = this.pos,
-            whitespace = [],
+            whitespace = [this.cur],
             ch,
             end
 
@@ -428,63 +346,48 @@ class Tokenizer {
             end,
             lineNo: this.lineNo,
             type: TOKEN_TYPE.WHITESPACE,
-            value: whitespace.join(''),
+            value: whitespace.join('')
         }
     }
 
     consumeString(ending) {
-        let result = [],
-            start = this.pos,
-            type = TOKEN_TYPE.STRING,
-            isEncounterEnding,
-            value,
-            ch,
-            end
+        let token = {
+            start: this.pos,
+            lineNo: this.lineNo,
+            value: '',
+            type: TOKEN_TYPE.STRING
+        }
 
-        while ((ch = this.peek())) {
-            //parse error, should reconsume the current input code point. so check this before call this.next()
-            if (ch === NEWLINE) {
-                type = TOKEN_TYPE.BAD_STRING
-                break
-            }
+        let ch
 
-            if (ch === REVERSE_SOLIDUS) {
-                if (!this.peek(2)) {
-                    break
-                }
-
-                if (this.peek(2).charCodeAt(0) === NEWLINE) {
-                    this.next()
-                    continue
-                }
-
-                if (this.checkValidEscape()) {
-                    result.push(this.consumeEscapedCodePoint())
-                    continue
-                }
-            }
+        while (1) {
+            ch = this.next()
 
             if (ch === ending) {
-                this.next()
-                isEncounterEnding = true
-                break
+                token.end = this.pos
+                return token
+            } else if (!ch) {
+                token.type = TOKEN_TYPE.BAD_STRING
+                return token
+            } else if (ch === NEWLINE) {
+                //parse error, should reconsume the current input code point. so check this before call this.next()
+                this.reconsume()
+                console.log('bad string', ch, ' ---')
+                token.type = TOKEN_TYPE.BAD_STRING
+                return token
+            } else if (ch === REVERSE_SOLIDUS) {
+                let next = this.peek(1)
+
+                if (next) {
+                    if (next === NEWLINE) {
+                        token.value += this.next()
+                    } else {
+                        token.value += this.consumeEscapedCodePoint()
+                    }
+                }
+            } else {
+                token.value += ch
             }
-
-            result.push(this.next())
-        }
-
-        if (!isEncounterEnding) {
-            type = TOKEN_TYPE.BAD_STRING
-        }
-
-        end = this.pos
-        value = result.join('')
-
-        return {
-            start,
-            end,
-            value,
-            type,
         }
     }
 
@@ -492,17 +395,20 @@ class Tokenizer {
         let number = this._consumeNumber()
 
         if (this.checkIdentifier()) {
-            let unitToken = simpleTokenWrapper.call(this, TOKEN_TYPE.DIMENSION, number)
+            let dimensionToken = this.wrap(TOKEN_TYPE.DIMENSION, number.value)
 
-            unitToken._unit = this.consumeName()
+            dimensionToken.typeFlag = number.type
+            dimensionToken.unit = this.consumeName()
 
-            return unitToken
+            return dimensionToken
         } else if (this.peek() === PERCENTAGE_SIGN) {
             number.value += this.next()
-            return simpleTokenWrapper.call(this, TOKEN_TYPE.PERCENTAGE, number)
+            return this.wrap(TOKEN_TYPE.PERCENTAGE, number.value)
         }
 
-        return simpleTokenWrapper.call(this, TOKEN_TYPE.NUMBER, number)
+        let token = this.wrap(TOKEN_TYPE.NUMBER, number.value)
+        token.typeFlag = number.type
+        return token
     }
 
     /**
@@ -558,57 +464,66 @@ class Tokenizer {
         value = parseInt(repr)
 
         return {
-            repr,
             value,
-            type,
+            type
         }
     }
 
     consumeIdent() {
-        let value = '',
-            start = this.pos,
-            end
-
-        value = this.consumeName()
+        let start = this.pos
+        let value = this.consumeName()
 
         if (value === 'url' && this.peek() === LEFT_PARENTHESIS) {
             this.next()
-            return this.consumeURL()
+            this.consumeWhitespace()
+
+            if (this.peek() === QUOTATION_MARK || this.peek() === APOSTROPHE) {
+                return {
+                    start,
+                    end: this.pos,
+                    lineNo: this.lineNo,
+                    type: TOKEN_TYPE.FUNCTION,
+                    value
+                }
+            } else {
+                return this.consumeURL()
+            }
         } else if (this.peek() === LEFT_PARENTHESIS) {
             this.next()
             return {
                 start,
-                end: start + value.length,
+                end: this.pos,
+                lineNo: this.lineNo,
                 type: TOKEN_TYPE.FUNCTION,
-                value,
+                value
             }
         }
 
-        end = start + value.length
-
         return {
             start,
-            end,
+            end: this.pos,
+            lineNo: this.lineNo,
             type: TOKEN_TYPE.IDENT,
-            value,
+            value
         }
     }
 
     consumeName() {
-        let result = '',
-            ch
+        let result = ''
+        let ch
 
-        while ((ch = this.peek())) {
+        while (1) {
+            ch = this.next()
+
             if (isName(ch)) {
-                result += this.next()
+                result += ch
             } else if (this.checkValidEscape()) {
                 result += this.consumeEscapedCodePoint()
             } else {
-                break
+                this.reconsume()
+                return result
             }
         }
-
-        return result
     }
 
     consumeEscapedCodePoint() {
@@ -650,7 +565,7 @@ class Tokenizer {
             value = '',
             token = {
                 type: TOKEN_TYPE.UNICODE_RANGE,
-                start: this.pos,
+                start: this.pos
             },
             isHexEnough,
             hasQuestionMark,
@@ -711,65 +626,38 @@ class Tokenizer {
 
     consumeURL() {
         let token = {
-                type: TOKEN_TYPE.URL,
-                start: this.pos,
-                value: '',
-            },
-            value = '',
-            ch
+            type: TOKEN_TYPE.URL,
+            start: this.pos,
+            value: ''
+        }
+        let ch
 
         this.consumeWhitespace()
-        ch = this.peek()
 
-        if (!ch) {
-            //EOF
-            return token
-        }
+        while (1) {
+            ch = this.next()
 
-        if (ch === QUOTATION_MARK || ch === APOSTROPHE) {
-            this.next()
-            let stringToken = this.consumeString(ch)
-
-            if (stringToken.type === TOKEN_TYPE.BAD_STRING) {
-                this.consumeRemnantsOfABadURL()
-                token.type = TOKEN_TYPE.BAD_URL
-                token.value = stringToken.value
+            if (!ch) {
+                //EOF
+                token.end = this.pos
                 return token
-            }
-
-            token.value = stringToken.value
-            this.consumeWhitespace()
-
-            if (!this.peek() || this.peek() === RIGHT_PARENTHESIS) {
-                this.next()
+            } else if (ch === RIGHT_PARENTHESIS) {
+                token.end = this.pos
                 return token
-            } else {
-                this.consumeRemnantsOfABadURL()
-                token.type = TOKEN_TYPE.BAD_URL
-                return token
-            }
-        }
-
-        while ((ch = this.peek())) {
-            if (ch === RIGHT_PARENTHESIS) {
-                this.next()
-                break
-            }
-
-            if (isWhitespace(ch)) {
+            } else if (isWhitespace(ch)) {
                 this.consumeWhitespace()
 
-                if (!this.peek() || this.peek() === RIGHT_PARENTHESIS) {
-                    this.next()
+                ch = this.next()
+
+                if (!ch || ch === RIGHT_PARENTHESIS) {
+                    token.end = this.pos
+                    return token
                 } else {
                     this.consumeRemnantsOfABadURL()
                     token.type = TOKEN_TYPE.BAD_URL
+                    return token
                 }
-
-                break
-            }
-
-            if (
+            } else if (
                 ch === QUOTATION_MARK ||
                 ch === APOSTROPHE ||
                 ch === LEFT_PARENTHESIS ||
@@ -777,43 +665,38 @@ class Tokenizer {
             ) {
                 this.consumeRemnantsOfABadURL()
                 token.type = TOKEN_TYPE.BAD_URL
-                break
-            }
-
-            if (ch === REVERSE_SOLIDUS) {
+                return token
+            } else if (ch === REVERSE_SOLIDUS) {
                 if (this.checkValidEscape()) {
-                    value += this.consumeEscapedCodePoint()
+                    token.value += this.consumeEscapedCodePoint()
                 } else {
                     //parse error
                     this.consumeRemnantsOfABadURL()
                     token.type = TOKEN_TYPE.BAD_URL
                     break
                 }
+            } else {
+                token.value += ch
             }
-
-            value += this.next()
         }
-
-        token.value = value
-        token.end = token.start + value.length
         return token
     }
 
     /**
+     * TODO:
      * this method won't return anything
      */
     consumeRemnantsOfABadURL() {
         let ch
 
-        while ((ch = this.peek())) {
-            if (ch === RIGHT_PARENTHESIS) {
-                this.next()
+        while (1) {
+            ch = this.next()
+
+            if (!ch || ch === RIGHT_PARENTHESIS) {
                 return
             } else if (this.checkValidEscape()) {
                 this.consumeEscapedCodePoint()
             }
-
-            this.next()
         }
     }
 
@@ -827,11 +710,7 @@ class Tokenizer {
             return false
         }
 
-        if (b === NEWLINE) {
-            return false
-        }
-
-        return true
+        return b !== NEWLINE
     }
 
     checkIdentifier() {
@@ -851,11 +730,7 @@ class Tokenizer {
             return true
         }
 
-        if (ch === REVERSE_SOLIDUS && this.checkValidEscape()) {
-            return true
-        }
-
-        return false
+        return !!(ch === REVERSE_SOLIDUS && this.checkValidEscape())
     }
 
     checkStarWithNumber(a, b, c) {
@@ -875,11 +750,17 @@ class Tokenizer {
             return true
         }
 
-        if (isDigit(a)) {
-            return true
-        }
+        return !!isDigit(a)
+    }
 
-        return false
+    wrap(type, value) {
+        return {
+            type,
+            start: this.pos,
+            end: this.pos + 1,
+            lineNo: this.lineNo,
+            value: value || this.cur
+        }
     }
 }
 
