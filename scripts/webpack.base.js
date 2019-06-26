@@ -7,7 +7,7 @@ module.exports = {
         filename: 'index.js',
         path: path.resolve('./dist'),
         // library: 'CSSParser',
-        libraryTarget: 'commonjs',
+        libraryTarget: 'commonjs'
     },
     module: {
         rules: [
@@ -15,9 +15,9 @@ module.exports = {
                 test: /\.js$/,
                 exclude: /node_modules/,
                 use: {
-                    loader: 'babel-loader',
-                },
-            },
-        ],
-    },
+                    loader: 'babel-loader'
+                }
+            }
+        ]
+    }
 }

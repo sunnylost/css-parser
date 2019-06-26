@@ -4,13 +4,13 @@
     "description": "parse css",
     "main": "build/index.js",
     "scripts": {
-        "dev": "webpack -w",
-        "build": "webpack",
+        "dev": "webpack -w --config scripts/webpack.dev.js",
+        "build": "webpack --config scripts/webpack.prod.js",
         "precommit": "lint-staged"
     },
     "lint-staged": {
         "*.js": [
-            "prettier --use-tabs=false --print-width=100 --tab-width=4 --single-quote --trailing-comma --bracket-spacing --write",
+            "eslint --fix --ignore-path .eslintignore",
             "git add"
         ]
     },
@@ -22,14 +22,17 @@
         "@babel/core": "^7.4.5",
         "@babel/preset-env": "^7.4.5",
         "ava": "^2.1.0",
+        "babel-eslint": "^10.0.2",
         "babel-loader": "^8.0.6",
         "eslint": "^6.0.1",
+        "eslint-config-prettier": "^6.0.0",
         "eslint-plugin-prettier": "^3.1.0",
         "husky": "^2.5.0",
         "lint-staged": "^8.2.1",
         "prettier": "^1.17.1",
         "webpack": "^4.35.0",
-        "webpack-cli": "^3.3.5"
+        "webpack-cli": "^3.3.5",
+        "webpack-merge": "^4.2.1"
     },
     "browserslist": [
         "> 1%",
