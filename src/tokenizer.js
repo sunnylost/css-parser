@@ -372,7 +372,6 @@ class Tokenizer {
             } else if (ch === NEWLINE) {
                 //parse error, should reconsume the current input code point. so check this before call this.next()
                 this.reconsume()
-                console.log('bad string', ch, ' ---')
                 token.type = TOKEN_TYPE.BAD_STRING
                 return token
             } else if (ch === REVERSE_SOLIDUS) {

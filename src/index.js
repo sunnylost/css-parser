@@ -15,7 +15,7 @@ class CSSParser {
             return null
         }
 
-        return new Parser(this.tokenize(src)).run()
+        return new Parser(new Tokenizer(src)).run()
     }
 }
 

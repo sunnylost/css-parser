@@ -1,6 +1,10 @@
 import TOKEN_TYPE from './tokenType'
 
-let mirrorType
+let mirrorType = {
+    [TOKEN_TYPE.LEFT_SQUARE_BRACKET]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
+    [TOKEN_TYPE.LEFT_PARENTHESIS]: TOKEN_TYPE.RIGHT_PARENTHESIS,
+    [TOKEN_TYPE.LEFT_CURLY_BRACKET]: TOKEN_TYPE.RIGHT_CURLY_BRACKET
+}
 
 const STYLESHEET = 'STYLESHEET',
     QUALIFIED_RULE = 'QUALIFIED_RULE',
@@ -17,36 +21,30 @@ const STYLESHEET = 'STYLESHEET',
         BLOCK,
         DECLARATION,
         FUNCTION,
-        SYNTAX_ERROR,
+        SYNTAX_ERROR
     }
 
 class Parser {
-    constructor(tokens) {
-        if (!tokens || !tokens.length) {
-            return []
-        }
-
-        this.tokens = tokens
-        this.len = tokens.length
-        this.index = 0
+    constructor(tokenizer) {
+        this.tokenizer = tokenizer
+        this.cur = null
+        this.prevTokens = []
     }
 
     run() {
-        mirrorType = {
-            [TOKEN_TYPE.LEFT_SQUARE_BRACKET]: TOKEN_TYPE.RIGHT_SQUARE_BRACKET,
-            [TOKEN_TYPE.LEFT_PARENTHESIS]: TOKEN_TYPE.RIGHT_PARENTHESIS,
-            [TOKEN_TYPE.LEFT_CURLY_BRACKET]: TOKEN_TYPE.RIGHT_CURLY_BRACKET,
-        }
         return this.parseStyleSheet()
     }
 
     next() {
-        return (this.cur = this.tokens[this.index++])
+        if (this.prevTokens.length) {
+            return this.prevTokens.shift()
+        } else {
+            return (this.cur = this.tokenizer.advance())
+        }
     }
 
     reconsume() {
-        this.index--
-        this.cur = this.tokens[this.index]
+        this.cur && this.prevTokens.push(this.cur)
     }
 
     //https://drafts.csswg.org/css-syntax-3/#parse-stylesheet
@@ -54,8 +52,8 @@ class Parser {
         return {
             type: TYPES.STYLESHEET,
             value: this.consumeListOfRules({
-                topLevel: true,
-            }),
+                topLevel: true
+            })
         }
     }
 
@@ -73,7 +71,7 @@ class Parser {
 
         if (token.type === TOKEN_TYPE.EOF) {
             return {
-                type: TYPES.SYNTAX_ERROR,
+                type: TYPES.SYNTAX_ERROR
             }
         } else if (token.type === TOKEN_TYPE.AT_RULE) {
             return this.consumeAtRule()
@@ -82,7 +80,7 @@ class Parser {
 
             if (!rule) {
                 return {
-                    type: TYPES.SYNTAX_ERROR,
+                    type: TYPES.SYNTAX_ERROR
                 }
             }
         }
@@ -95,7 +93,7 @@ class Parser {
             return rule
         } else {
             return {
-                type: TYPES.SYNTAX_ERROR,
+                type: TYPES.SYNTAX_ERROR
             }
         }
     }
@@ -109,13 +107,13 @@ class Parser {
 
         if (token.type !== TOKEN_TYPE.IDENT) {
             return {
-                type: TYPES.SYNTAX_ERROR,
+                type: TYPES.SYNTAX_ERROR
             }
         }
 
         return (
             this.consumeDeclaration() || {
-                type: TYPES.SYNTAX_ERROR,
+                type: TYPES.SYNTAX_ERROR
             }
         )
     }
@@ -133,14 +131,14 @@ class Parser {
 
         if (token.type === TOKEN_TYPE.EOF) {
             return {
-                type: TYPES.SYNTAX_ERROR,
+                type: TYPES.SYNTAX_ERROR
             }
         }
 
         this.reconsume()
 
         let value = this.consumeComponent() || {
-            type: TYPES.SYNTAX_ERROR,
+            type: TYPES.SYNTAX_ERROR
         }
 
         while (token.type === TOKEN_TYPE.WHITESPACE) {
@@ -151,7 +149,7 @@ class Parser {
             return value
         } else {
             return {
-                type: TYPES.SYNTAX_ERROR,
+                type: TYPES.SYNTAX_ERROR
             }
         }
     }
@@ -213,7 +211,7 @@ class Parser {
         let atRule = {
                 type: TYPES.AT_RULE,
                 name: this.cur.value,
-                prelude: [],
+                prelude: []
             },
             token
 
@@ -239,7 +237,7 @@ class Parser {
     consumeQualifiedRule() {
         let rule = {
                 type: TYPES.QUALIFIED_RULE,
-                prelude: [],
+                prelude: []
             },
             token
 
@@ -318,7 +316,7 @@ class Parser {
     consumeDeclaration() {
         let declaration = {
                 type: TYPES.DECLARATION,
-                value: [],
+                value: []
             },
             token
 
@@ -382,7 +380,7 @@ class Parser {
             block = {
                 type: TYPES.BLOCK,
                 token: this.cur,
-                value: [],
+                value: []
             },
             token
 
@@ -404,7 +402,7 @@ class Parser {
             func = {
                 type: TYPES.FUNCTION,
                 name: cur.value,
-                value: [],
+                value: []
             },
             token
 
