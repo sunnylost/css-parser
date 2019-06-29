@@ -58,14 +58,15 @@ class Parser {
     }
 
     parseListOfRules() {
+        //unset topLevel
         return this.consumeListOfRules()
     }
 
     parseRule() {
-        let token = this.next(),
-            rule
+        let token = this.next()
+        let rule
 
-        if (token.type === TOKEN_TYPE.WHITESPACE) {
+        while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
@@ -73,7 +74,7 @@ class Parser {
             return {
                 type: TYPES.SYNTAX_ERROR
             }
-        } else if (token.type === TOKEN_TYPE.AT_RULE) {
+        } else if (token.type === TOKEN_TYPE.AT_KEYWORD) {
             return this.consumeAtRule()
         } else {
             rule = this.consumeQualifiedRule()
@@ -84,6 +85,8 @@ class Parser {
                 }
             }
         }
+
+        token = this.next()
 
         while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
@@ -135,11 +138,9 @@ class Parser {
             }
         }
 
-        this.reconsume()
+        let value = this.consumeComponent()
 
-        let value = this.consumeComponent() || {
-            type: TYPES.SYNTAX_ERROR
-        }
+        token = this.next()
 
         while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
@@ -155,9 +156,10 @@ class Parser {
     }
 
     parseListOfComponent() {
-        let list = [],
-            token
+        let list = []
+        let token
 
+        //TODO: 5.3.8
         while ((token = this.next()) && token.type !== TOKEN_TYPE.EOF) {
             list.push(this.consumeComponent())
         }
@@ -165,10 +167,34 @@ class Parser {
         return list
     }
 
+    //TODO
+    parseCommaSeparatedListOfComponent() {
+        let cvls = []
+        let list = []
+
+        while (1) {
+            let token = this.consumeComponent()
+
+            if (token.type === TOKEN_TYPE.EOF) {
+                cvls.push(list)
+                list.length = 0
+                break
+            } else if (token.type === TOKEN_TYPE.COMMA) {
+                cvls.push(list)
+                list.length = 0
+            } else {
+                list.push(token)
+            }
+        }
+
+        return cvls
+    }
+
     //5.4.1
     consumeListOfRules(opts = {}) {
-        let rules = [],
-            token
+        let rules = []
+        let token
+        let qualifiedRule
 
         while ((token = this.next())) {
             let type = token.type
@@ -184,7 +210,7 @@ class Parser {
                 case TOKEN_TYPE.CDO:
                     if (!opts.topLevel) {
                         this.reconsume()
-                        let qualifiedRule = this.consumeQualifiedRule()
+                        qualifiedRule = this.consumeQualifiedRule()
                         qualifiedRule && rules.push(qualifiedRule)
                     }
                     break
@@ -198,7 +224,7 @@ class Parser {
 
                 default:
                     this.reconsume()
-                    let qualifiedRule = this.consumeQualifiedRule()
+                    qualifiedRule = this.consumeQualifiedRule()
                     qualifiedRule && rules.push(qualifiedRule)
             }
         }
@@ -208,16 +234,17 @@ class Parser {
 
     //5.4.2
     consumeAtRule() {
+        let token = this.next()
         let atRule = {
-                type: TYPES.AT_RULE,
-                name: this.cur.value,
-                prelude: []
-            },
-            token
+            type: TYPES.AT_RULE,
+            name: token.value,
+            prelude: []
+        }
 
         while ((token = this.next())) {
             let type = token.type
 
+            //EOF: parse error
             if (type === TOKEN_TYPE.SEMICOLON || type === TOKEN_TYPE.EOF) {
                 break
             } else if (type === TOKEN_TYPE.LEFT_CURLY_BRACKET) {
@@ -236,10 +263,10 @@ class Parser {
     //5.4.3
     consumeQualifiedRule() {
         let rule = {
-                type: TYPES.QUALIFIED_RULE,
-                prelude: []
-            },
-            token
+            type: TYPES.QUALIFIED_RULE,
+            prelude: []
+        }
+        let token
 
         while ((token = this.next())) {
             let type = token.type
@@ -263,9 +290,9 @@ class Parser {
 
     //5.4.4
     consumeListOfDeclarations() {
-        let list = [],
-            token,
-            _token
+        let list = []
+        let token
+        let _token
 
         while ((token = this.next())) {
             switch (token.type) {
@@ -277,6 +304,7 @@ class Parser {
                     break
 
                 case TOKEN_TYPE.AT_KEYWORD:
+                    this.reconsume()
                     list.push(this.consumeAtRule())
                     break
 
@@ -288,22 +316,24 @@ class Parser {
                         _token.type !== TOKEN_TYPE.EOF &&
                         _token.type !== TOKEN_TYPE.SEMICOLON
                     ) {
-                        _list.push(_token)
+                        _list.push(this.consumeComponent())
                     }
 
                     let result = this.consumeDeclaration(_list) //TODO: from _list
 
                     result && list.push(result)
-
                     break
 
                 default:
                     //parse error
+                    this.reconsume()
+
                     while (
                         (_token = this.next()) &&
                         _token.type !== TOKEN_TYPE.EOF &&
                         _token.type !== TOKEN_TYPE.SEMICOLON
                     ) {
+                        this.consumeComponent()
                         //do nothing
                     }
             }
@@ -315,14 +345,12 @@ class Parser {
     //5.4.5
     consumeDeclaration() {
         let declaration = {
-                type: TYPES.DECLARATION,
-                value: []
-            },
-            token
+            type: TYPES.DECLARATION,
+            value: []
+        }
+        let token = this.next()
 
-        token = this.next()
-
-        if (token.type === TOKEN_TYPE.WHITESPACE) {
+        while (token.type === TOKEN_TYPE.WHITESPACE) {
             token = this.next()
         }
 
@@ -332,14 +360,19 @@ class Parser {
         }
 
         while ((token = this.next())) {
-            if (token.type !== TOKEN_TYPE.EOF) {
-                declaration.value.push(token)
+            if (token.type !== TOKEN_TYPE.WHITESPACE) {
+                if (token.type !== TOKEN_TYPE.EOF) {
+                    declaration.value.push(this.consumeComponent())
+                } else {
+                    //TODO
+                    return declaration
+                }
             }
         }
 
-        let value = declaration.value,
-            last = value[value.lenght - 1],
-            nextToLast = value[value.length - 2]
+        let value = declaration.value
+        let last = value[value.lenght - 1]
+        let nextToLast = value[value.length - 2]
 
         //parse !important
         if (
@@ -358,8 +391,8 @@ class Parser {
 
     //5.4.6
     consumeComponent() {
-        let token = this.next(),
-            type = token.type
+        let token = this.next()
+        let type = token.type
 
         if (
             type === TOKEN_TYPE.LEFT_SQUARE_BRACKET ||
@@ -376,13 +409,13 @@ class Parser {
 
     //5.4.7
     consumeSimpleBlock(ending) {
-        let endingTokenType = mirrorType[ending],
-            block = {
-                type: TYPES.BLOCK,
-                token: this.cur,
-                value: []
-            },
-            token
+        let endingTokenType = mirrorType[ending]
+        let block = {
+            type: TYPES.BLOCK,
+            token: this.cur,
+            value: []
+        }
+        let token
 
         while ((token = this.next())) {
             if (token.type === TOKEN_TYPE.EOF || token.type === endingTokenType) {
@@ -398,13 +431,13 @@ class Parser {
 
     //5.4.8
     consumeFunction() {
-        let cur = this.cur,
-            func = {
-                type: TYPES.FUNCTION,
-                name: cur.value,
-                value: []
-            },
-            token
+        let cur = this.cur
+        let func = {
+            type: TYPES.FUNCTION,
+            name: cur.value,
+            value: []
+        }
+        let token
 
         while ((token = this.next())) {
             if (token.type === TOKEN_TYPE.EOF || token.type === TOKEN_TYPE.RIGHT_PARENTHESIS) {
